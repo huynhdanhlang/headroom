@@ -11,6 +11,8 @@
 scripts/
 !scripts/
 scripts/*
+!scripts/build_ai_motion.py
+!scripts/benchmark_ai_motion.py
 !scripts/install.sh
 !scripts/install.ps1
 !scripts/version-sync.py

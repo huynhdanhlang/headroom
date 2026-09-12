@@ -198,7 +198,7 @@ def test_smart_crusher_no_policy_keeps_legacy_write_behaviour(fresh_toin):
 # ─── ContentRouter: apply() captures the policy ─────────────────────────
 
 
-def test_content_router_apply_stores_runtime_policy():
+def test_content_router_apply_scopes_runtime_policy(monkeypatch):
     """``ContentRouter.apply()`` must populate
     ``self._runtime_compression_policy`` from kwargs so
     ``_record_to_toin`` can read it.
@@ -218,10 +218,17 @@ def test_content_router_apply_stores_runtime_policy():
     # Empty-message apply is fine — the field assignment happens
     # before the message walk, so we don't need a payload that
     # actually compresses.
+    observed = []
+    original = router._build_tool_name_map
+
+    def capture(messages):
+        observed.append(router._runtime_compression_policy)
+        return original(messages)
+
+    monkeypatch.setattr(router, "_build_tool_name_map", capture)
     router.apply([], _tokenizer(), compression_policy=policy)
-    assert router._runtime_compression_policy is policy, (
-        "ContentRouter.apply() must capture the policy onto self so _record_to_toin can read it"
-    )
+    assert observed == [policy], "TOIN policy must be bound while the request is processed"
+    assert router._runtime_compression_policy is None, "policy must not leak into the next request"
 
 
 def test_content_router_subscription_skips_toin_record(fresh_toin):

@@ -44,11 +44,13 @@ import re
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from functools import wraps
 from typing import Any
 
 from ..config import (
@@ -1717,6 +1719,27 @@ _PER_REQUEST_DEFAULTS: dict[str, Any] = {
     "_runtime_kompress_model": None,
     "_runtime_compression_policy": None,
 }
+_PER_REQUEST_FACTORIES: dict[str, Callable[[], Any]] = {
+    "_tool_call_args": dict,
+    "_tool_call_commands": dict,
+    "_protect_read_tool_ids": set,
+    "_protect_read_msg_indices": set,
+}
+_REQUEST_UNSET = object()
+
+
+def _request_default(name: str) -> Any:
+    factory = _PER_REQUEST_FACTORIES.get(name)
+    return factory() if factory is not None else _PER_REQUEST_DEFAULTS[name]
+
+
+def _scoped_router_request(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def scoped(self: ContentRouter, *args: Any, **kwargs: Any) -> Any:
+        with self.request_scope():
+            return method(self, *args, **kwargs)
+
+    return scoped
 
 
 class _PerRequestOption:
@@ -1730,13 +1753,10 @@ class _PerRequestOption:
     since nothing raises and the request just compresses under the wrong
     policy (#3486).
 
-    Backing each option with a :class:`~contextvars.ContextVar` keeps the
-    existing ``self._runtime_x`` read/write syntax at every call site while
-    isolating concurrent callers: a thread starts with an empty context, so
-    one request's writes are invisible to another's. Values are *not* reset
-    when ``apply()`` returns, matching the previous attribute behaviour that
-    callers such as ``compression_batches`` rely on when they save, override
-    and restore an option around a call.
+    Each router owns its ContextVars; mutable defaults are created per context.
+    ``request_scope()`` binds fresh request state and restores the caller's
+    state on completion or error, including nested requests. Direct callers
+    can still save, override and restore an individual option around a call.
 
     Threads spawned *inside* one request (``apply``'s compression fan-out)
     must be started through :func:`contextvars.copy_context` so they inherit
@@ -1757,7 +1777,12 @@ class _PerRequestOption:
     def __get__(self, obj: ContentRouter | None, objtype: type | None = None) -> Any:
         if obj is None:
             return self
-        return self._var(obj).get()
+        variable = self._var(obj)
+        value = variable.get()
+        if value is _REQUEST_UNSET:
+            value = _request_default(self._name)
+            variable.set(value)
+        return value
 
     def __set__(self, obj: ContentRouter, value: Any) -> None:
         self._var(obj).set(value)
@@ -1809,6 +1834,23 @@ class ContentRouter(Transform):
     _runtime_skip_kompress = _PerRequestOption()
     _runtime_kompress_model = _PerRequestOption()
     _runtime_compression_policy = _PerRequestOption()
+    _tool_call_args = _PerRequestOption()
+    _tool_call_commands = _PerRequestOption()
+    _protect_read_tool_ids = _PerRequestOption()
+    _protect_read_msg_indices = _PerRequestOption()
+
+    @contextmanager
+    def request_scope(self) -> Iterator[None]:
+        """Isolate one request without leaking state into a reused worker."""
+        variables = self.__dict__["_per_request_vars"]
+        tokens = [
+            (variable, variable.set(_request_default(name))) for name, variable in variables.items()
+        ]
+        try:
+            yield
+        finally:
+            for variable, token in reversed(tokens):
+                variable.reset(token)
 
     # Lossy summarizers that emit a CCR retrieve marker only when they store the
     # original — a marker-less result from one of these is unrecoverable. Tool
@@ -1855,6 +1897,11 @@ class ContentRouter(Transform):
                 observation; pick one explicitly per the no-fallback
                 rule in the audit doc.
         """
+        # Initialize before any descriptor-backed tool map is assigned below.
+        self.__dict__["_per_request_vars"] = {
+            name: ContextVar(f"ContentRouter.{name}", default=_REQUEST_UNSET)
+            for name in (*_PER_REQUEST_DEFAULTS, *_PER_REQUEST_FACTORIES)
+        }
         self.config = config or ContentRouterConfig()
         # No-CCR lossless mode is self-consistent regardless of how the config
         # was built: force marker-free output and marker-free SmartCrusher so
@@ -1984,22 +2031,6 @@ class ContentRouter(Transform):
 
         # TOIN integration for cross-strategy learning
         self._toin: Any = None
-
-        # Per-request routing options (``_runtime_target_ratio``,
-        # ``_runtime_compression_policy``, ...) are ``_PerRequestOption``
-        # descriptors, so one shared router can serve concurrent requests
-        # without their options colliding (#3486). Each option's ContextVar
-        # is built here rather than on first write so two concurrent
-        # requests cannot race to create two vars for the same option.
-        #
-        # F2.2: ``_runtime_compression_policy`` defaults to ``None`` so
-        # direct ``compress()`` callers (tests, hand-written pipelines that
-        # don't go through the proxy) keep pre-F2.2 behaviour: TOIN writes
-        # are not gated.
-        self.__dict__["_per_request_vars"] = {
-            name: ContextVar(f"ContentRouter.{name}", default=default)
-            for name, default in _PER_REQUEST_DEFAULTS.items()
-        }
 
         self._cache = CompressionCache()
 
@@ -4818,6 +4849,7 @@ class ContentRouter(Transform):
             transforms_applied.append(f"netcost:skip:{_gain_bucket(gain)}")
         return allowed
 
+    @_scoped_router_request
     def apply(
         self,
         messages: list[dict[str, Any]],

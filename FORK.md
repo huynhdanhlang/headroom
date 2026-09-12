@@ -23,11 +23,8 @@ an immutable upstream image, preserving its native extension and dependencies.
 Changing Rust or dependencies requires rebuilding the base rather than this overlay.
 
 ```bash
-git diff --exit-code
-git diff --cached --exit-code
-docker build -f docker/Dockerfile.ai-motion \
-  --build-arg FORK_COMMIT="$(git rev-parse HEAD)" \
-  -t "headroom-amv:$(git rev-parse --short=12 HEAD)" .
+python scripts/build_ai_motion.py --check-only
+python scripts/build_ai_motion.py
 ```
 
 The runtime reports `0.37.0+amv.<commit>` and OCI labels identify the full fork commit.
@@ -50,3 +47,40 @@ preservation, a real Responses request, dashboard rows and bounded percentages. 
 verify resumed desktop traffic, including native array tool outputs, after cutover.
 Keep the stable image and a stopped-service backup of configuration, state and cache.
 Preserve valid internal model-cache symlinks in both backup and restore.
+
+
+## Curated upstream changes
+
+Pending PRs are reviewed by exact head/commit and tested against this fork; they are not merged in bulk.
+
+| Upstream PR | Decision for this runtime | Reason |
+| --- | --- | --- |
+| #3487 | Integrated its two implementation/test commits, then adapted | Context-local options alone did not scope tool maps, read protection, reused workers, or Responses worker contexts. |
+| #3556 | Regression test adopted; alternative implementation excluded | It overlapped #3487 and omitted watchdog/fan-out context propagation. |
+| #3562 | Deferred | Its bare retrieval tool can reach unsupported Codex subscription streams and changes cached tool schemas. |
+| #3256 | Deferred pending a cache-specific benchmark | Our base already has deadline-based SQLite expiry purging; the older PR also changes eviction/backing-store lifecycle. |
+| #3385 | Deferred | Automatic repricing can mix message and schema savings and rewrite historical totals inconsistently. |
+| #3373 | Deferred as low priority for this local workload | Current low key cardinality does not exercise its over-capacity cleanup bottleneck. |
+
+The adaptation scopes all request options, tool-call maps and read-protection sets; copied worker contexts preserve
+those values, and request exit restores the caller's state. Both `apply()` and the native Responses unit path
+are covered, including exceptions, reused workers, batches, watchdogs and read/TOIN protection.
+
+The build guard requires a clean commit, one immutable base stage, correct destinations for every changed runtime
+file, and a base rebuild for native/dependency changes or runtime deletions. This prevents a future cherry-pick
+from passing source tests while silently remaining absent from the deployed image.
+
+## Performance and context maintenance
+
+Use `scripts/benchmark_ai_motion.py` in a source-configured development environment with the matching native
+extension. Each case runs in a fresh child process with temporary local Headroom state and an in-memory CCR store;
+it never uses the live proxy or inherited remote CCR configuration. Compare the same fixtures and concurrency on
+both revisions. It is a synthetic router benchmark, not an LLM latency or subscription-quota benchmark.
+
+Keep cache mode/coding profile until a matched workload demonstrates a reason to change them. Report provider
+connection/inference time separately from compression overhead. Cached tokens still occupy model context;
+narrow code reads, compact command results and deliberate task handoffs remain useful. Treat dollar counters
+as API-equivalent estimates, not subscription savings. Preserve meaningful source-read content and recoverability.
+
+Use RTK for compact command output and Codegraph for indexed symbol/call-path lookup. Keep Codegraph's database
+local; use exact unfiltered output when a test failure or content hash needs it.
