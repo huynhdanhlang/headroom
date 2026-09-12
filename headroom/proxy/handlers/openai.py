@@ -18,8 +18,10 @@ import time
 import uuid
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from dataclasses import replace
 from datetime import datetime
+from functools import wraps
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, unquote, urlparse
 
@@ -1484,6 +1486,24 @@ def _append_unique_transforms(transforms: list[str], labels: list[str] | None) -
             transforms.append(label)
 
 
+def _scoped_responses_router(method):
+    @wraps(method)
+    def scoped(self, *args, **kwargs):
+        try:
+            from headroom.transforms.compression_units import find_content_router
+        except Exception:
+            # The original adapter owns its unavailable-dependency fallback.
+            return method(self, *args, **kwargs)
+
+        router = find_content_router(getattr(self, "openai_pipeline", None))
+        if router is None:
+            return method(self, *args, **kwargs)
+        with router.request_scope():
+            return method(self, *args, **kwargs)
+
+    return scoped
+
+
 def _openai_responses_payload_input_tokens(
     payload: dict[str, Any],
     token_provider: Any,
@@ -1970,6 +1990,7 @@ class OpenAIHandlerMixin:
                 changed += 1
         return restored, changed
 
+    @_scoped_responses_router
     def _compress_openai_responses_live_text_units_with_router(
         self,
         payload: dict[str, Any],
@@ -2531,7 +2552,10 @@ class OpenAIHandlerMixin:
             executor = _openai_responses_unit_executor()
             for start in range(0, len(cache_misses), parallelism):
                 batch = cache_misses[start : start + parallelism]
-                futures = [executor.submit(_compress_and_store, *item) for item in batch]
+                futures = [
+                    executor.submit(copy_context().run, _compress_and_store, *item)
+                    for item in batch
+                ]
                 for future in as_completed(futures):
                     unit_idx, cache_key, routed_result = future.result()
                     _record_routed_result(unit_idx, cache_key, routed_result)
@@ -2569,7 +2593,10 @@ class OpenAIHandlerMixin:
             executor = _openai_responses_unit_executor()
             for start in range(0, len(small_batches), parallelism):
                 batch_group = small_batches[start : start + parallelism]
-                futures = [executor.submit(_compress_batch, batch) for batch in batch_group]
+                futures = [
+                    executor.submit(copy_context().run, _compress_batch, batch)
+                    for batch in batch_group
+                ]
                 for future in as_completed(futures):
                     _record_batch_result(future.result())
         else:

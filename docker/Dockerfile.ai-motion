@@ -4,16 +4,9 @@ ARG FORK_COMMIT
 USER root
 COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
 COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
+COPY headroom/transforms/content_router.py /usr/local/lib/python3.13/site-packages/headroom/transforms/content_router.py
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
-RUN python - <<'BUILD'
-import os, re
-from pathlib import Path
-revision = os.environ.get("FORK_COMMIT", "")
-if not re.fullmatch(r"[a-f0-9]{40}", revision):
-    raise SystemExit("FORK_COMMIT must identify the exact clean fork commit")
-version = "0.37.0+amv." + revision[:12]
-Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = " + repr(version) + "\n")
-BUILD
+RUN python -c 'import os,re,sys; from pathlib import Path; revision=os.environ.get("FORK_COMMIT",""); re.fullmatch(r"[a-f0-9]{40}",revision) or sys.exit("FORK_COMMIT must identify the exact clean fork commit"); version="0.37.0+amv."+revision[:12]; Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = "+repr(version)+"\n")'
 LABEL org.opencontainers.image.source="https://github.com/huynhdanhlang/headroom"
 LABEL org.opencontainers.image.revision="${FORK_COMMIT}"
 LABEL ai-motion-video.headroom.source="${FORK_COMMIT}"

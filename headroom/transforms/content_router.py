@@ -44,10 +44,13 @@ import re
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from functools import wraps
 from typing import Any
 
 from ..config import (
@@ -1706,6 +1709,85 @@ class ContentRouterConfig:
     search_group_by_file: bool = False
 
 
+# Per-request routing options and their "no override" defaults. ``apply()``
+# writes all of these at the start of every call; ``compress()`` and the
+# strategy dispatcher read them further down the same call stack.
+_PER_REQUEST_DEFAULTS: dict[str, Any] = {
+    "_runtime_target_ratio": None,
+    "_runtime_force_kompress": False,
+    "_runtime_skip_kompress": False,
+    "_runtime_kompress_model": None,
+    "_runtime_compression_policy": None,
+}
+_PER_REQUEST_FACTORIES: dict[str, Callable[[], Any]] = {
+    "_tool_call_args": dict,
+    "_tool_call_commands": dict,
+    "_protect_read_tool_ids": set,
+    "_protect_read_msg_indices": set,
+}
+_REQUEST_UNSET = object()
+
+
+def _request_default(name: str) -> Any:
+    factory = _PER_REQUEST_FACTORIES.get(name)
+    return factory() if factory is not None else _PER_REQUEST_DEFAULTS[name]
+
+
+def _scoped_router_request(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def scoped(self: ContentRouter, *args: Any, **kwargs: Any) -> Any:
+        with self.request_scope():
+            return method(self, *args, **kwargs)
+
+    return scoped
+
+
+class _PerRequestOption:
+    """An attribute whose value is scoped to the writing thread/context.
+
+    The proxy builds ONE ``ContentRouter`` and shares it across every request
+    (``headroom/proxy/server.py``), while compression runs on an
+    ``os.cpu_count()``-wide executor. Storing per-request options as plain
+    instance attributes let two concurrent requests overwrite each other's
+    ``target_ratio`` / ``force_kompress`` / ``compression_policy`` — silently,
+    since nothing raises and the request just compresses under the wrong
+    policy (#3486).
+
+    Each router owns its ContextVars; mutable defaults are created per context.
+    ``request_scope()`` binds fresh request state and restores the caller's
+    state on completion or error, including nested requests. Direct callers
+    can still save, override and restore an individual option around a call.
+
+    Threads spawned *inside* one request (``apply``'s compression fan-out)
+    must be started through :func:`contextvars.copy_context` so they inherit
+    the options of the request that spawned them.
+    """
+
+    __slots__ = ("_name",)
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self._name = name
+
+    def _var(self, obj: ContentRouter) -> ContextVar[Any]:
+        # Created eagerly in ``__init__`` so concurrent first writes cannot
+        # race to build two ContextVars for the same option.
+        variables: dict[str, ContextVar[Any]] = obj.__dict__["_per_request_vars"]
+        return variables[self._name]
+
+    def __get__(self, obj: ContentRouter | None, objtype: type | None = None) -> Any:
+        if obj is None:
+            return self
+        variable = self._var(obj)
+        value = variable.get()
+        if value is _REQUEST_UNSET:
+            value = _request_default(self._name)
+            variable.set(value)
+        return value
+
+    def __set__(self, obj: ContentRouter, value: Any) -> None:
+        self._var(obj).set(value)
+
+
 class ContentRouter(Transform):
     """Intelligent router that selects optimal compression strategy.
 
@@ -1742,6 +1824,33 @@ class ContentRouter(Transform):
     """
 
     name: str = "content_router"
+
+    # Per-request options. Written by ``apply()`` (and by callers such as
+    # ``compression_batches`` that override one around a call), read further
+    # down the same call stack. Context-scoped so a router shared across
+    # concurrent requests keeps each request's options to itself (#3486).
+    _runtime_target_ratio = _PerRequestOption()
+    _runtime_force_kompress = _PerRequestOption()
+    _runtime_skip_kompress = _PerRequestOption()
+    _runtime_kompress_model = _PerRequestOption()
+    _runtime_compression_policy = _PerRequestOption()
+    _tool_call_args = _PerRequestOption()
+    _tool_call_commands = _PerRequestOption()
+    _protect_read_tool_ids = _PerRequestOption()
+    _protect_read_msg_indices = _PerRequestOption()
+
+    @contextmanager
+    def request_scope(self) -> Iterator[None]:
+        """Isolate one request without leaking state into a reused worker."""
+        variables = self.__dict__["_per_request_vars"]
+        tokens = [
+            (variable, variable.set(_request_default(name))) for name, variable in variables.items()
+        ]
+        try:
+            yield
+        finally:
+            for variable, token in reversed(tokens):
+                variable.reset(token)
 
     # Lossy summarizers that emit a CCR retrieve marker only when they store the
     # original — a marker-less result from one of these is unrecoverable. Tool
@@ -1788,6 +1897,11 @@ class ContentRouter(Transform):
                 observation; pick one explicitly per the no-fallback
                 rule in the audit doc.
         """
+        # Initialize before any descriptor-backed tool map is assigned below.
+        self.__dict__["_per_request_vars"] = {
+            name: ContextVar(f"ContentRouter.{name}", default=_REQUEST_UNSET)
+            for name in (*_PER_REQUEST_DEFAULTS, *_PER_REQUEST_FACTORIES)
+        }
         self.config = config or ContentRouterConfig()
         # No-CCR lossless mode is self-consistent regardless of how the config
         # was built: force marker-free output and marker-free SmartCrusher so
@@ -1917,17 +2031,6 @@ class ContentRouter(Transform):
 
         # TOIN integration for cross-strategy learning
         self._toin: Any = None
-
-        # F2.2: per-request CompressionPolicy, set from
-        # ``kwargs["compression_policy"]`` at the start of ``apply()``
-        # and read by ``_record_to_toin`` to gate TOIN writes when
-        # ``policy.toin_read_only`` is true (Subscription mode).
-        # Defaults to ``None`` so direct ``compress()`` callers (e.g.
-        # tests, hand-written pipelines that don't go through the
-        # proxy) keep pre-F2.2 behaviour: TOIN writes are not gated.
-        # Same pattern the existing ``_runtime_target_ratio`` /
-        # ``_runtime_kompress_model`` fields below use.
-        self._runtime_compression_policy: Any = None
 
         self._cache = CompressionCache()
 
@@ -4746,6 +4849,7 @@ class ContentRouter(Transform):
             transforms_applied.append(f"netcost:skip:{_gain_bucket(gain)}")
         return allowed
 
+    @_scoped_router_request
     def apply(
         self,
         messages: list[dict[str, Any]],
@@ -4818,17 +4922,20 @@ class ContentRouter(Transform):
             "min_chars_for_block_compression",
             self.config.min_chars_for_block_compression,
         )
-        # Store runtime options on self for access by _route_and_compress_block
-        self._runtime_target_ratio: float | None = kwargs.get("target_ratio")
-        self._runtime_force_kompress: bool = bool(
+        # Store this request's routing options for access by
+        # _route_and_compress_block. These are ``_PerRequestOption``
+        # descriptors: the writes below are visible to this request's
+        # call stack only, not to other requests sharing the router (#3486).
+        self._runtime_target_ratio = kwargs.get("target_ratio")
+        self._runtime_force_kompress = bool(
             kwargs.get("force_kompress", self.config.force_kompress_all)
         )
         # skip_kompress: run everything EXCEPT the Kompress ML stage this
         # call. Used by the cold-start fast pass so the request-path pass
         # stays sub-second; units routed to Kompress take the same fallback
         # they take when the model isn't ready. Wins over force_kompress.
-        self._runtime_skip_kompress: bool = bool(kwargs.get("skip_kompress", False))
-        self._runtime_kompress_model: str | None = kwargs.get("kompress_model")
+        self._runtime_skip_kompress = bool(kwargs.get("skip_kompress", False))
+        self._runtime_kompress_model = kwargs.get("kompress_model")
         # F2.2: capture the per-request CompressionPolicy so
         # ``_record_to_toin`` can gate TOIN writes on
         # ``policy.toin_read_only``. ``None`` when the caller didn't
@@ -5502,8 +5609,14 @@ class ContentRouter(Transform):
                                 _box["error"] = exc
 
                         # ponytail: daemon watchdog cannot stop native GIL holds; native layer owns that fix.
+                        # ``copy_context()`` so the worker inherits THIS
+                        # request's per-request options; a fresh thread would
+                        # otherwise start from the defaults (#3486).
                         worker = threading.Thread(
-                            target=_run, name="headroom-single-compress-watchdog", daemon=True
+                            target=copy_context().run,
+                            args=(_run,),
+                            name="headroom-single-compress-watchdog",
+                            daemon=True,
                         )
                         worker.start()
                         worker.join(deadline_s)
@@ -5536,8 +5649,12 @@ class ContentRouter(Transform):
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = []
                     for _, task_content, task_ctx, task_bias, _, _, task_detection in pending_tasks:
+                        # One ``copy_context()`` per task: pool workers start
+                        # from an empty context, and a single Context object
+                        # cannot be entered by two threads at once (#3486).
                         futures.append(
                             executor.submit(
+                                copy_context().run,
                                 self._timed_compress,
                                 task_content,
                                 task_ctx,
