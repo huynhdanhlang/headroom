@@ -5635,8 +5635,16 @@ class OpenAIHandlerMixin:
                     detail=f"Rate limited. Retry after {wait_seconds:.1f}s",
                 )
 
-        # Token counting on converted messages (offloaded off the event loop — GH #1701)
-        tokenizer, original_tokens = await self._count_tokens_offloaded(model, messages)
+        # Native Responses arrays are compressed below but are deliberately not
+        # normalized into `messages` for request forwarding/session identity.
+        # Include their text/tool outputs in the accounting ruler, otherwise an
+        # array-only request is counted as an empty chat prompt (three tokens).
+        counting_messages = (
+            _responses_input_to_waste_messages(instructions, input_data)
+            if isinstance(input_data, list)
+            else messages
+        )
+        tokenizer, original_tokens = await self._count_tokens_offloaded(model, counting_messages)
         # Messages-only count, preserved for the output shaper's turn/size
         # classifier: the accounting pair below may widen original_tokens by
         # the tools schema after compression, and shaper strata must not

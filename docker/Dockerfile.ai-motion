@@ -1,0 +1,21 @@
+# Python-only maintenance overlay on the exact upstream native build.
+FROM ghcr.io/headroomlabs-ai/headroom:code-63c5df8@sha256:dad48358f61d7f56bbc2ed0b59f240644aa762b65a853fe1a4cc921941700760
+ARG FORK_COMMIT
+USER root
+COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
+COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
+COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
+RUN python - <<'BUILD'
+import os, re
+from pathlib import Path
+revision = os.environ.get("FORK_COMMIT", "")
+if not re.fullmatch(r"[a-f0-9]{40}", revision):
+    raise SystemExit("FORK_COMMIT must identify the exact clean fork commit")
+version = "0.37.0+amv." + revision[:12]
+Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = " + repr(version) + "\n")
+BUILD
+LABEL org.opencontainers.image.source="https://github.com/huynhdanhlang/headroom"
+LABEL org.opencontainers.image.revision="${FORK_COMMIT}"
+LABEL ai-motion-video.headroom.source="${FORK_COMMIT}"
+ENTRYPOINT ["headroom"]
+CMD ["proxy"]

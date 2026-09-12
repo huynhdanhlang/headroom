@@ -167,3 +167,65 @@ def test_no_tools_payload_keeps_messages_only_pair():
     assert o.original_tokens - o.optimized_tokens == o.tokens_saved
     assert o.optimized_tokens > 0
     assert o.tokens_saved <= o.original_tokens
+
+
+@pytest.mark.parametrize(
+    "item_type", ["message", "function_call_output", "custom_tool_call_output"]
+)
+def test_array_input_is_included_in_http_savings_denominator(item_type):
+    """Native Responses arrays must not be counted as an empty chat request."""
+    app = _make_app()
+    server = app.state.proxy
+
+    async def fake_retry(method, url, headers, body, stream=False, **kwargs):
+        return _fake_upstream_response(url)
+
+    server._retry_request = fake_retry
+    if item_type == "message":
+        item = {
+            "type": item_type,
+            "role": "user",
+            "content": [{"type": "input_text", "text": "word " * 12000}],
+        }
+        compact_item = {
+            "type": item_type,
+            "role": "user",
+            "content": [{"type": "input_text", "text": "retained"}],
+        }
+    else:
+        item = {"type": item_type, "call_id": "audit", "output": "word " * 12000}
+        compact_item = {"type": item_type, "call_id": "audit", "output": "retained"}
+
+    async def fake_compress(payload, **kwargs):
+        compressed = {**payload, "input": [compact_item]}
+        return (
+            compressed,
+            True,
+            _TOKENS_SAVED,
+            ["audit:tool-output"],
+            None,
+            60000,
+            1000,
+            _TOKENS_SAVED,
+            {},
+        )
+
+    server._compress_openai_responses_payload_in_executor = fake_compress
+    outcomes = []
+
+    async def capture(outcome):
+        outcomes.append(outcome)
+
+    server._record_request_outcome = capture
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/responses",
+            headers={"Authorization": "Bearer sk-test"},
+            json={"model": "gpt-5-codex", "input": [item]},
+        )
+    assert response.status_code == 200
+    outcome = outcomes[0]
+    assert outcome.original_tokens > _TOKENS_SAVED
+    assert outcome.optimized_tokens > 0
+    assert outcome.original_tokens - outcome.optimized_tokens == _TOKENS_SAVED
+    assert 0 <= outcome.savings_pct <= 100
