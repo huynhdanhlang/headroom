@@ -411,6 +411,12 @@ def _build_agent_usage_summary(
             row["requests"] += int(count)
             row["models"][str(model)] = int(row["models"].get(str(model), 0)) + int(count)
 
+    # Rows contain per-request removals in a bounded log window. Global
+    # counters may instead contain deduplicated conversation savings and
+    # requests already evicted from the log. Never mix those denominators.
+    saved_denominator = (
+        sum(int(row["tokens_saved"]) for row in agents.values()) if logs else global_tokens_saved
+    )
     rows: list[dict[str, Any]] = []
     for row in agents.values():
         before = int(row["before_tokens"])
@@ -423,7 +429,7 @@ def _build_agent_usage_summary(
         row["savings_percent"] = savings_percent
         row["after_percent"] = round((after / before) * 100.0, 2) if before else 0.0
         row["share_of_saved_percent"] = (
-            round((saved / global_tokens_saved) * 100.0, 2) if global_tokens_saved else 0.0
+            round((saved / saved_denominator) * 100.0, 2) if saved_denominator else 0.0
         )
         row["share_of_requests_percent"] = 0.0
         rows.append(row)
@@ -442,6 +448,12 @@ def _build_agent_usage_summary(
         ),
         reverse=True,
     )
+
+    if logs:
+        global_before_tokens = sum(int(row["before_tokens"]) for row in rows)
+        global_after_tokens = sum(int(row["after_tokens"]) for row in rows)
+        global_output_tokens = sum(int(row["output_tokens"]) for row in rows)
+        global_tokens_saved = saved_denominator
 
     return {
         "agents": rows,

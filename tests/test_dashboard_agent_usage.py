@@ -240,8 +240,10 @@ def test_agent_usage_recovers_before_tokens_from_after_and_saved() -> None:
     assert row["before_tokens"] == 100
     assert row["savings_percent"] == 30.0
     assert row["after_percent"] == 70.0
-    assert row["share_of_saved_percent"] == 0.0
-    assert summary["totals"]["savings_percent"] == 0.0
+    # Logged requests own this panel even when the global deduplicated
+    # counter is zero: this sole agent accounts for all 30 observed removals.
+    assert row["share_of_saved_percent"] == 100.0
+    assert summary["totals"]["savings_percent"] == 30.0
 
 
 def test_agent_usage_clamps_negative_token_values() -> None:
@@ -274,3 +276,59 @@ def test_agent_usage_clamps_negative_token_values() -> None:
     assert row["tokens_saved"] == 0
     assert row["output_tokens"] == 0
     assert row["has_exact_tokens"] is False
+
+
+def test_agent_shares_and_totals_use_the_same_logged_request_scope():
+    # The global headline deduplicates repeated conversation savings (150).
+    # These rows measure per-request removals (250), so mixing them yields 133%.
+    logs = [
+        {
+            "provider": "openai",
+            "model": "gpt-5-codex",
+            "tags": {"client": "codex"},
+            "input_tokens_original": 1000,
+            "input_tokens_optimized": 900,
+            "tokens_saved": 100,
+            "output_tokens": 10,
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5-codex",
+            "tags": {"client": "codex"},
+            "input_tokens_original": 1000,
+            "input_tokens_optimized": 900,
+            "tokens_saved": 100,
+            "output_tokens": 10,
+        },
+        {
+            "provider": "anthropic",
+            "model": "claude-sonnet",
+            "tags": {"client": "claude-code"},
+            "input_tokens_original": 500,
+            "input_tokens_optimized": 450,
+            "tokens_saved": 50,
+            "output_tokens": 5,
+        },
+    ]
+    for global_saved in [150, 3000]:
+        summary = _build_agent_usage_summary(
+            logs,
+            requests_by_provider={},
+            requests_by_model={},
+            global_before_tokens=9000,
+            global_after_tokens=6000,
+            global_tokens_saved=global_saved,
+            global_output_tokens=200,
+        )
+        rows = {row["agent"]: row for row in summary["agents"]}
+        assert rows["codex"]["share_of_saved_percent"] == 80.0
+        assert rows["claude-code"]["share_of_saved_percent"] == 20.0
+        assert summary["totals"] == {
+            "requests": 3,
+            "before_tokens": 2500,
+            "after_tokens": 2250,
+            "output_tokens": 25,
+            "tokens_saved": 250,
+            "savings_percent": 10.0,
+        }
+        assert summary["coverage"]["mode"] == "request_logs"
