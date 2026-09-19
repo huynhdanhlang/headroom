@@ -635,3 +635,20 @@ def test_responses_codex_exec_test_output_still_compresses(monkeypatch):
 
     assert modified is True
     assert new_payload["input"][1] != _codex_exec_output("call_pytest", _NL_OUTPUT)
+
+
+def test_responses_codex_rtk_proxy_read_stays_verbatim(monkeypatch):
+    monkeypatch.setenv("HEADROOM_PROTECT_READS", "1")
+    handler = _handler_with_router(_lossy_router())
+    output = _codex_exec_output("call_rtk", _NL_OUTPUT)
+    payload = {
+        "model": "gpt-5",
+        "input": [
+            _codex_exec_call("call_rtk", "rtk proxy sed -n '20,115p' src/app.py"),
+            output,
+        ],
+    }
+
+    new_payload, _modified, _s, _t, _u, _c, _a = _run(handler, payload)
+
+    assert new_payload["input"][1] == output

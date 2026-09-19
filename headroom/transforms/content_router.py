@@ -753,10 +753,11 @@ _SHELL_WRAPPERS = frozenset(
 def _bash_program(command: str) -> tuple[str, list[str]]:
     """Return ``(program_basename_lower, trailing_tokens)`` for a shell command.
 
-    Peels leading wrappers (``rtk grep`` -> ``grep``, ``timeout 30 rg`` -> ``rg``)
-    and env assignments (``FOO=1 grep`` -> ``grep``). Empty program when it can't
-    be determined. Whitespace-split is deliberately simple — the reversibility
-    guard downstream makes a parse miss harmless.
+    Peels leading wrappers (``rtk grep`` -> ``grep``, ``rtk proxy sed`` ->
+    ``sed``, ``timeout 30 rg`` -> ``rg``) and env assignments (``FOO=1 grep``
+    -> ``grep``). Empty program when it can't be determined. Whitespace-split
+    is deliberately simple — the reversibility guard downstream makes a parse
+    miss harmless.
     """
     toks = command.strip().split()
     i = 0
@@ -766,6 +767,13 @@ def _bash_program(command: str) -> tuple[str, list[str]]:
             i += 1
             continue
         base = tok.rsplit("/", 1)[-1].lower()  # /usr/bin/grep -> grep
+        if base == "rtk":
+            i += 1
+            while i < len(toks) and toks[i].startswith("-"):
+                i += 1
+            if i < len(toks) and toks[i].rsplit("/", 1)[-1].lower() == "proxy":
+                i += 1
+            continue
         if base in _SHELL_WRAPPERS:
             i += 1
             # Skip this wrapper's own option/numeric args (timeout 30, nice -n 5).

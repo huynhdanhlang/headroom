@@ -2279,3 +2279,38 @@ def test_prompt_text_compresses_without_replay_guarantee(monkeypatch: pytest.Mon
         min_tokens_to_compress=1,
     )
     assert _TASK in calls
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rtk proxy sed -n '1,120p' src/app.py",
+        "rtk proxy nl -ba src/app.py",
+        "rtk proxy cat src/app.py",
+    ],
+)
+def test_rtk_proxy_compound_wrapper_preserves_source_read_classification(command):
+    from headroom.transforms.content_router import _is_read_command
+
+    assert _is_read_command(command) is True
+
+
+def test_rtk_proxy_compound_wrapper_keeps_derived_output_compressible():
+    from headroom.transforms.content_router import (
+        _bash_command_is_search,
+        _bash_program,
+        _is_read_command,
+    )
+
+    assert _bash_program("rtk proxy rg -n request_scope headroom") == (
+        "rg",
+        ["-n", "request_scope", "headroom"],
+    )
+    assert _bash_command_is_search(
+        "rtk proxy rg -n request_scope headroom", frozenset({"rg"})
+    )
+    assert not _is_read_command("rtk proxy pytest -q tests/test_router.py")
+    assert not _is_read_command("rtk proxy cat Cargo.lock")
+    assert not _is_read_command("rtk proxy cat src/app.py > /tmp/app-copy.py")
+    assert _bash_program("proxy cat src/app.py")[0] == "proxy"
+    assert _bash_program("rtk proxy") == ("", [])
