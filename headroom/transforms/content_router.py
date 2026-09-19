@@ -570,6 +570,40 @@ def _tool_call_command_text(raw: Any) -> str:
     return cmd if isinstance(cmd, str) else ""
 
 
+_EXEC_COMMAND_CALL_RE = re.compile(r"\bexec_command\s*\(")
+
+
+def _custom_tool_call_commands(raw: Any) -> list[str]:
+    """Extract shell commands from a Codex code-mode ``exec`` custom tool call.
+
+    Codex sends shell commands as a Responses ``custom_tool_call`` named ``exec``
+    whose ``input`` is a JavaScript snippet rather than JSON arguments::
+
+        const r = await tools.exec_command({"cmd": "sed -n '1,80p' f.py", "workdir": "…"});
+        text(r.output);
+
+    Returns every ``cmd`` passed to ``exec_command``, in order. Returns ``[]`` when
+    the input is not that shape; an argument object that is not strict JSON is
+    skipped, which leaves the output compressible exactly as before.
+    """
+    if not isinstance(raw, str) or "exec_command" not in raw:
+        return []
+    decoder = json.JSONDecoder()
+    commands: list[str] = []
+    for match in _EXEC_COMMAND_CALL_RE.finditer(raw):
+        start = raw.find("{", match.end())
+        if start < 0 or raw[match.end() : start].strip():
+            continue
+        try:
+            args, _end = decoder.raw_decode(raw, start)
+        except ValueError:
+            continue
+        command = _tool_call_command_text(args)
+        if command:
+            commands.append(command)
+    return commands
+
+
 def _fenced_shell_command(content: Any) -> str:
     """Extract the shell command from a TEXT-BASED agent's fenced code block.
 
@@ -584,6 +618,23 @@ def _fenced_shell_command(content: Any) -> str:
         return ""
     m = re.search(r"```(?:[\w.-]+)?[ \t]*\n(.*?)```", content, re.S)
     return m.group(1).strip() if m else ""
+
+
+def _answers_fenced_command(messages: list[dict[str, Any]], index: int) -> bool:
+    """True when the user message at ``index`` replies to a fenced shell command.
+
+    Text-based harnesses (mini-swe-agent and similar) send a command in a fenced
+    block in the assistant turn and return its output as the next plain user
+    message. That message is a tool observation, not the caller's prompt. Walks
+    back to the nearest assistant turn, stopping at an earlier user turn.
+    """
+    for j in range(index - 1, -1, -1):
+        role = messages[j].get("role") if isinstance(messages[j], dict) else None
+        if role == "assistant":
+            return bool(_fenced_shell_command(messages[j].get("content")))
+        if role == "user":
+            return False
+    return False
 
 
 _READ_VERBS = ("cat", "head", "tail", "nl", "bat", "less", "more")
@@ -1964,11 +2015,6 @@ class ContentRouter(Transform):
         # different strategies for the same block, share one provider
         # invocation. See `_lossless_provider_result`.
         self._lossless_provider_memo: dict[tuple[int, int, int], tuple[str, str] | None] = {}
-
-        # tool_call_id → compact args text, populated by _build_tool_name_map.
-        self._tool_call_args: dict[str, str] = {}
-        # tool_call_id → raw shell command (bash-search fold), same population.
-        self._tool_call_commands: dict[str, str] = {}
 
         # Phase 0 (#1171): cap the input size handed to kompress (ModernBERT
         # ONNX). Its inference scales O(tokens) and runs synchronously on the
@@ -5046,6 +5092,16 @@ class ContentRouter(Transform):
 
         # --- Adaptive parameters based on context pressure ---
         num_messages = len(messages)
+        # The opening prompt: every user message before the first assistant
+        # turn. See `protect_prompt_text` in _process_content_blocks.
+        first_assistant_index = next(
+            (
+                idx
+                for idx, msg in enumerate(messages)
+                if isinstance(msg, dict) and msg.get("role") == "assistant"
+            ),
+            num_messages,
+        )
         model_limit = kwargs.get("model_limit", 0)
 
         # Adaptive Read protection: protect a fraction of recent messages
@@ -5250,6 +5306,23 @@ class ContentRouter(Transform):
             bias = 1.0  # Default bias, may be overridden for tool messages
 
             messages_from_end = num_messages - i
+            # The caller's own words stay verbatim on a replaying path even
+            # when user messages are compressible for their tool observations:
+            # the opening prompt (a task statement with test ids and paths)
+            # and the text of the newest user turn. Lossy text compression
+            # there rewrites what the model is asked to do, and nothing but a
+            # cache_control marker used to stop it -- a marker Claude Code sets
+            # and plain agents do not. The one newest user turn that is not a
+            # prompt is a text harness's tool observation: the reply to a
+            # fenced shell command in the assistant turn before it.
+            prompt_turn = (
+                prefix_replay_guaranteed
+                and role == "user"
+                and (
+                    i < first_assistant_index
+                    or (messages_from_end == 1 and not _answers_fenced_command(messages, i))
+                )
+            )
 
             # Handle list content (Anthropic format with content blocks)
             if isinstance(content, list):
@@ -5272,6 +5345,7 @@ class ContentRouter(Transform):
                     skip_system=skip_system,
                     compress_assistant_text_blocks=compress_assistant_text_blocks,
                     prefix_replay_guaranteed=prefix_replay_guaranteed,
+                    protect_prompt_text=prompt_turn,
                 )
                 result_slots[i] = transformed_message
                 route_counts["content_blocks"] += 1
@@ -5388,8 +5462,9 @@ class ContentRouter(Transform):
                     route_counts["read_protected"] += 1
                     continue
 
-            # Protection 1: Never compress user messages (unless overridden)
-            if skip_user and role == "user":
+            # Protection 1: Never compress user messages (unless overridden),
+            # and never the caller's prompt on a replaying path.
+            if role == "user" and (skip_user or prompt_turn):
                 result_slots[i] = message
                 transforms_applied.append("router:protected:user_message")
                 route_counts["user_msg"] += 1
@@ -5645,7 +5720,16 @@ class ContentRouter(Transform):
                     compress_ms = (time.perf_counter() - t0) * 1000
                     task_results.append((r, compress_ms))
             else:
-                # Parallel compression via thread pool
+                # Parallel compression via thread pool.
+                # #3486/#3556: `ThreadPoolExecutor.submit` does NOT copy the
+                # calling thread's `contextvars.Context` either, so each worker
+                # would otherwise see each descriptor's request-default value
+                # instead of this request's bound state. Snapshot a fresh
+                # `copy_context()` PER TASK (a single
+                # `Context` object cannot be `.run()` by two threads
+                # concurrently — it raises `RuntimeError` — so the snapshot
+                # must not be shared/reused across submissions) and run
+                # `_timed_compress` inside it on the worker thread.
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = []
                     for _, task_content, task_ctx, task_bias, _, _, task_detection in pending_tasks:
@@ -6172,6 +6256,7 @@ class ContentRouter(Transform):
         skip_system: bool = True,
         compress_assistant_text_blocks: bool = False,
         prefix_replay_guaranteed: bool = False,
+        protect_prompt_text: bool = False,
     ) -> dict[str, Any]:
         """Process content blocks (Anthropic format) for compression.
 
@@ -6233,6 +6318,10 @@ class ContentRouter(Transform):
             skip_system: If True, never compress text blocks in system-role messages.
             compress_assistant_text_blocks: If True, allow compressing text blocks in
                 assistant-role messages. Default False (cache-safe).
+            protect_prompt_text: If True, text blocks in this user message are the
+                caller's prompt (the opening task or the newest user turn) and stay
+                verbatim even when ``skip_user`` is False; tool_result blocks in the
+                same message are still compressible.
 
         Returns:
             Transformed message with compressed content blocks.
@@ -6245,7 +6334,7 @@ class ContentRouter(Transform):
         # outputs and compress freely; assistant defaults to skip (cache
         # safety) with explicit opt-in; unknown roles default to skip.
         if role == "user":
-            protect_text_blocks = skip_user
+            protect_text_blocks = skip_user or protect_prompt_text
         elif role in {"system", "developer"}:
             protect_text_blocks = skip_system
         elif role == "assistant":
