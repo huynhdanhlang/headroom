@@ -34,6 +34,7 @@ Pipeline Usage:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import hashlib
 import json
@@ -561,7 +562,10 @@ def _tool_call_command_text(raw: Any) -> str:
         try:
             raw = json.loads(raw)
         except (ValueError, TypeError):
-            return ""
+            commands = _custom_tool_call_commands(raw)
+            if not commands:
+                return ""
+            return next((command for command in commands if _is_read_command(command)), commands[0])
     if not isinstance(raw, dict):
         return ""
     cmd = raw.get("command", raw.get("cmd", ""))
@@ -571,6 +575,84 @@ def _tool_call_command_text(raw: Any) -> str:
 
 
 _EXEC_COMMAND_CALL_RE = re.compile(r"\bexec_command\s*\(")
+_JS_IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+_UNKNOWN_EXEC_COMMAND = "\0headroom:unknown-exec-command"
+
+
+def _js_string_literal(raw: str, start: int) -> tuple[str, int] | None:
+    """Decode one quoted JavaScript string without evaluating code."""
+    if start >= len(raw) or raw[start] not in {"'", '"'}:
+        return None
+    quote = raw[start]
+    index = start + 1
+    while index < len(raw):
+        char = raw[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            literal = raw[start : index + 1]
+            try:
+                value = ast.literal_eval(literal)
+            except (SyntaxError, ValueError):
+                return None
+            return (value, index + 1) if isinstance(value, str) else None
+        index += 1
+    return None
+
+
+def _js_object_command(raw: str, start: int) -> str | None:
+    """Return a static top-level ``cmd``/``command`` string from a JS object."""
+    if start >= len(raw) or raw[start] != "{":
+        return None
+    index = start + 1
+    depth = 1
+    while index < len(raw) and depth:
+        char = raw[index]
+        if char in {"'", '"'}:
+            parsed = _js_string_literal(raw, index)
+            if parsed is None:
+                return None
+            key, end = parsed
+            if depth == 1:
+                cursor = end
+                while cursor < len(raw) and raw[cursor].isspace():
+                    cursor += 1
+                if cursor < len(raw) and raw[cursor] == ":":
+                    cursor += 1
+                    while cursor < len(raw) and raw[cursor].isspace():
+                        cursor += 1
+                    if key in {"cmd", "command"}:
+                        value = _js_string_literal(raw, cursor)
+                        return value[0] if value is not None else None
+            index = end
+            continue
+        if char in "{[(":
+            depth += 1
+            index += 1
+            continue
+        if char in "}])":
+            depth -= 1
+            index += 1
+            continue
+        if depth == 1 and (char.isalpha() or char in "_$"):
+            match = _JS_IDENTIFIER_RE.match(raw, index)
+            if match is not None:
+                key = match.group(0)
+                cursor = match.end()
+                while cursor < len(raw) and raw[cursor].isspace():
+                    cursor += 1
+                if cursor < len(raw) and raw[cursor] == ":":
+                    cursor += 1
+                    while cursor < len(raw) and raw[cursor].isspace():
+                        cursor += 1
+                    if key in {"cmd", "command"}:
+                        value = _js_string_literal(raw, cursor)
+                        return value[0] if value is not None else None
+                index = match.end()
+                continue
+        index += 1
+    return None
 
 
 def _custom_tool_call_commands(raw: Any) -> list[str]:
@@ -582,9 +664,10 @@ def _custom_tool_call_commands(raw: Any) -> list[str]:
         const r = await tools.exec_command({"cmd": "sed -n '1,80p' f.py", "workdir": "…"});
         text(r.output);
 
-    Returns every ``cmd`` passed to ``exec_command``, in order. Returns ``[]`` when
-    the input is not that shape; an argument object that is not strict JSON is
-    skipped, which leaves the output compressible exactly as before.
+    Returns every statically-known ``cmd`` passed to ``exec_command``, in order.
+    Both strict JSON and ordinary JavaScript object literals are supported. An
+    exec call whose command cannot be determined returns a private conservative
+    sentinel so its single output stays byte-exact instead of being compressed.
     """
     if not isinstance(raw, str) or "exec_command" not in raw:
         return []
@@ -593,14 +676,15 @@ def _custom_tool_call_commands(raw: Any) -> list[str]:
     for match in _EXEC_COMMAND_CALL_RE.finditer(raw):
         start = raw.find("{", match.end())
         if start < 0 or raw[match.end() : start].strip():
+            commands.append(_UNKNOWN_EXEC_COMMAND)
             continue
         try:
             args, _end = decoder.raw_decode(raw, start)
         except ValueError:
+            commands.append(_js_object_command(raw, start) or _UNKNOWN_EXEC_COMMAND)
             continue
         command = _tool_call_command_text(args)
-        if command:
-            commands.append(command)
+        commands.append(command or _UNKNOWN_EXEC_COMMAND)
     return commands
 
 
@@ -703,6 +787,8 @@ def _is_read_command(command: str) -> bool:
     """
     if not command or not isinstance(command, str):
         return False
+    if command == _UNKNOWN_EXEC_COMMAND:
+        return True
     # strip leading `cd <dir> && ` chains (agents prefix reads with a cd)
     c = _strip_cd_prefix(command)
     # a write / append / tee / heredoc anywhere => not a pure read

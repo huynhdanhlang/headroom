@@ -14,6 +14,9 @@ fidelity is the feature; the token saving is the easy part.
 from __future__ import annotations
 
 import copy
+from types import MethodType
+
+import pytest
 
 from headroom.proxy.gateway_responses import (
     VIEW_MARKER,
@@ -231,6 +234,122 @@ def test_a_call_input_is_compressible():
     assert changed is True
     assert out["input"][0]["input"] == "ls -R"
     assert out["input"][0]["call_id"] == "c1"
+
+
+@pytest.mark.parametrize(
+    ("call", "expected_name", "expected_command"),
+    [
+        (
+            {
+                "type": "function_call",
+                "call_id": "read",
+                "name": "exec_command",
+                "arguments": '{"cmd":"rtk proxy cat src/app.py"}',
+            },
+            "exec_command",
+            "rtk proxy cat src/app.py",
+        ),
+        (
+            {
+                "type": "custom_tool_call",
+                "call_id": "custom",
+                "name": "exec",
+                "input": "tools.exec_command({cmd: \"rtk proxy sed -n '1,80p' src/app.py\"})",
+            },
+            "exec",
+            "rtk proxy sed -n '1,80p' src/app.py",
+        ),
+        (
+            {
+                "type": "function_call",
+                "call_id": "retrieve",
+                "name": "headroom_retrieve",
+                "arguments": '{"hash":"abc123"}',
+            },
+            "headroom_retrieve",
+            "",
+        ),
+    ],
+)
+def test_call_view_retains_router_tool_identity(call, expected_name, expected_command):
+    from headroom.transforms.content_router import ContentRouter
+
+    view = build_view(_call_body(call))
+    router = ContentRouter()
+
+    assert router._build_tool_name_map(view.messages) == {call["call_id"]: expected_name}
+    assert router._tool_call_commands.get(call["call_id"], "") == expected_command
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments", "protected"),
+    [
+        ("exec_command", '{"cmd":"rtk proxy cat src/app.py"}', True),
+        ("headroom_retrieve", '{"hash":"abc123"}', True),
+        ("exec_command", '{"cmd":"pytest -q tests/test_app.py"}', False),
+    ],
+)
+def test_gateway_responses_view_preserves_tool_output_protection(
+    monkeypatch, name, arguments, protected
+):
+    from headroom.transforms.content_router import (
+        CompressionStrategy,
+        ContentRouter,
+        ContentRouterConfig,
+        ContentType,
+        RouterCompressionResult,
+        RoutingDecision,
+    )
+
+    monkeypatch.setenv("HEADROOM_PROTECT_READS", "1")
+    original = "\n".join(f"def function_{i}():\n    return {i}" for i in range(120))
+    body = {
+        "model": "gpt-5-codex",
+        "input": [
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": name,
+                "arguments": arguments,
+            },
+            {"type": "function_call_output", "call_id": "call_1", "output": original},
+        ],
+    }
+    view = build_view(body)
+    router = ContentRouter(ContentRouterConfig(min_section_tokens=1, enable_kompress=False))
+
+    def compress(self, content: str, **_kwargs):
+        return RouterCompressionResult(
+            compressed="kept words Retrieve more: hash=deadbeef",
+            original=content,
+            strategy_used=CompressionStrategy.KOMPRESS,
+            routing_log=[
+                RoutingDecision(
+                    content_type=ContentType.PLAIN_TEXT,
+                    strategy=CompressionStrategy.KOMPRESS,
+                    original_tokens=max(100, len(content) // 4),
+                    compressed_tokens=10,
+                )
+            ],
+        )
+
+    router.compress = MethodType(compress, router)
+
+    class Counter:
+        def count_text(self, text: str) -> int:
+            return max(1, len(text) // 4)
+
+    result = router.apply(
+        view.messages,
+        Counter(),
+        force_kompress=True,
+        min_tokens_to_compress=1,
+        protect_recent=0,
+        read_protection_window=0,
+    )
+
+    output = result.messages[-1]["content"]
+    assert (output == original) is protected
 
 
 def test_json_arguments_are_rewritten_only_when_the_result_still_parses():

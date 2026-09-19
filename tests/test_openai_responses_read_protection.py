@@ -571,14 +571,19 @@ def test_custom_tool_call_commands_parses_codex_exec_input():
     ]
 
 
-def test_custom_tool_call_commands_ignores_other_shapes():
-    from headroom.transforms.content_router import _custom_tool_call_commands
+def test_custom_tool_call_commands_handles_javascript_literals_conservatively():
+    from headroom.transforms.content_router import (
+        _custom_tool_call_commands,
+        _is_read_command,
+    )
 
     assert _custom_tool_call_commands(None) == []
     assert _custom_tool_call_commands({"cmd": "cat f"}) == []
     assert _custom_tool_call_commands("*** Begin Patch\n*** Update File: f.py\n") == []
-    assert _custom_tool_call_commands("tools.exec_command(notJson)") == []
-    assert _custom_tool_call_commands("tools.exec_command({cmd: 'cat f'})") == []
+    assert _custom_tool_call_commands("tools.exec_command({cmd: 'cat f'})") == ["cat f"]
+    uncertain = _custom_tool_call_commands("tools.exec_command(notJson)")
+    assert len(uncertain) == 1
+    assert _is_read_command(uncertain[0]), "unknown exec output must fail closed to exact bytes"
 
 
 def test_responses_codex_exec_read_stays_verbatim(monkeypatch):
@@ -645,6 +650,34 @@ def test_responses_codex_rtk_proxy_read_stays_verbatim(monkeypatch):
         "model": "gpt-5",
         "input": [
             _codex_exec_call("call_rtk", "rtk proxy sed -n '20,115p' src/app.py"),
+            output,
+        ],
+    }
+
+    new_payload, _modified, _s, _t, _u, _c, _a = _run(handler, payload)
+
+    assert new_payload["input"][1] == output
+
+
+def test_responses_codex_javascript_literal_script_with_read_stays_verbatim(monkeypatch):
+    monkeypatch.setenv("HEADROOM_PROTECT_READS", "1")
+    handler = _handler_with_router(_lossy_router())
+    output = _codex_exec_output("call_js", _NL_OUTPUT)
+    script = """
+const status = await tools.exec_command({cmd: "git status --short", workdir: "/repo"});
+text(status.output);
+const source = await tools.exec_command({cmd: "rtk proxy sed -n '20,115p' src/app.py"});
+text(source.output);
+"""
+    payload = {
+        "model": "gpt-5",
+        "input": [
+            {
+                "type": "custom_tool_call",
+                "call_id": "call_js",
+                "name": "exec",
+                "input": script,
+            },
             output,
         ],
     }

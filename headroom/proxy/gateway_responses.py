@@ -163,12 +163,34 @@ def build_view(body: dict[str, Any]) -> ResponsesView:
     messages: list[dict[str, Any]] = []
     slots: list[Slot] = []
 
-    def emit(role: str, text: str, slot: Slot, *, tool_call_id: str | None = None) -> None:
+    def emit(
+        role: str,
+        text: str,
+        slot: Slot,
+        *,
+        tool_call_id: str | None = None,
+        tool_name: str | None = None,
+        tool_arguments: str | None = None,
+    ) -> None:
         message: dict[str, Any] = {"role": role, "content": text}
         if tool_call_id:
             # The pipeline keys tool results off this; without it a fold that
             # groups by call would treat every result as the same call.
             message["tool_call_id"] = tool_call_id
+        if tool_call_id and tool_name:
+            # Internal view metadata only. ContentRouter uses OpenAI tool_calls
+            # to preserve excluded-tool and source-read protection; apply_view
+            # writes back only ``content``, so this never reaches the provider.
+            message["tool_calls"] = [
+                {
+                    "id": tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": tool_arguments or "",
+                    },
+                }
+            ]
         messages.append(message)
         slots.append(slot)
 
@@ -213,11 +235,18 @@ def build_view(body: dict[str, Any]) -> ResponsesView:
             value = item.get(call_field)
             if isinstance(value, str) and value:
                 call_id = item.get("call_id")
+                tool_name = item.get("name")
+                tool_name = tool_name if isinstance(tool_name, str) and tool_name else str(kind)
+                tool_arguments = value
+                if kind == "local_shell_call":
+                    tool_arguments = json.dumps({"cmd": value})
                 emit(
                     "assistant",
                     value,
                     Slot("call", index, field=call_field),
                     tool_call_id=call_id if isinstance(call_id, str) else None,
+                    tool_name=tool_name,
+                    tool_arguments=tool_arguments,
                 )
             continue
 

@@ -71,6 +71,7 @@ def test_actual_maintenance_recipe_is_supported():
     path = Path(__file__).resolve().parents[1] / "docker/Dockerfile.ai-motion"
     sources = module.copied_sources(path.read_text())
     assert "headroom/transforms/content_router.py" in sources
+    assert "headroom/proxy/gateway_responses.py" in sources
 
 
 def test_guard_pins_integrated_upstream_source_and_native_image():

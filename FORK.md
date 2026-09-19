@@ -83,7 +83,8 @@ Python 3.14 packaging, and the rustls/anyio security updates.
 
 The upstream range changes Rust sources and dependency lockfiles, so it is supplied by the exact native base
 image above rather than copied through the Python overlay. The fork overlay contains only the accounting,
-request-scope, RTK-aware source-read protection, dashboard and build-contract differences from `bc21c937`.
+request-scope, RTK-aware source-read protection, gateway Responses tool-identity protection, dashboard and
+build-contract differences from `bc21c937`.
 
 ## Performance and context maintenance
 
