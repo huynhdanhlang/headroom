@@ -1,6 +1,9 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `63c5df8a39c4c515a0b9b714050e530df8efeb7a` (package version 0.37.0).
+Upstream base: `bc21c9370793f7e4aa94ac4c5d9a67a8d2dd0df9` (package version 0.37.0).
+
+The native/dependency base is the signed multi-architecture image
+`ghcr.io/headroomlabs-ai/headroom:code-bc21c93@sha256:cc517ad22cc1a0c4618cc1bdea612b345f9c0928c13958dae86c9f1d481c380d`.
 
 This fork keeps the upstream compression/cache policy. Its maintenance changes are:
 
@@ -56,7 +59,7 @@ Pending PRs are reviewed by exact head/commit and tested against this fork; they
 | Upstream PR | Decision for this runtime | Reason |
 | --- | --- | --- |
 | #3487 | Integrated its two implementation/test commits, then adapted | Context-local options alone did not scope tool maps, read protection, reused workers, or Responses worker contexts. |
-| #3556 | Regression test adopted; alternative implementation excluded | It overlapped #3487 and omitted watchdog/fan-out context propagation. |
+| #3556 | Integrated, then adapted | Its tests and upstream behavior are retained; the fork keeps broader scoping, caller restoration, reused-worker cleanup, and Responses/watchdog/fan-out context propagation. |
 | #3562 | Deferred | Its bare retrieval tool can reach unsupported Codex subscription streams and changes cached tool schemas. |
 | #3256 | Deferred pending a cache-specific benchmark | Our base already has deadline-based SQLite expiry purging; the older PR also changes eviction/backing-store lifecycle. |
 | #3385 | Deferred | Automatic repricing can mix message and schema savings and rewrite historical totals inconsistently. |
@@ -69,6 +72,18 @@ are covered, including exceptions, reused workers, batches, watchdogs and read/T
 The build guard requires a clean commit, one immutable base stage, correct destinations for every changed runtime
 file, and a base rebuild for native/dependency changes or runtime deletions. This prevents a future cherry-pick
 from passing source tests while silently remaining absent from the deployed image.
+
+## Upstream synchronization through `bc21c937`
+
+The 24 commits after the former `63c5df8a` base were reviewed by exact commit and integrated. They include
+Codex Live HTTP creation, Responses `custom_tool_call` read protection, signed-thinking/tool-search fidelity,
+gateway-turn and Responses gateway contracts, grep-context classification, strict-lossless SmartCrusher fixes,
+runtime-env request-size protection, rootless Podman ownership, project-root handling, Kompress serialization,
+Python 3.14 packaging, and the rustls/anyio security updates.
+
+The upstream range changes Rust sources and dependency lockfiles, so it is supplied by the exact native base
+image above rather than copied through the Python overlay. The fork overlay contains only the accounting,
+request-scope, RTK-aware source-read protection, dashboard and build-contract differences from `bc21c937`.
 
 ## Performance and context maintenance
 
