@@ -2121,6 +2121,8 @@ def test_compression_fanout_inherits_per_request_options(
     assert all(entry[1:] == (0.25, "test-model") for entry in off_thread), (
         f"fan-out workers lost the request's options: {off_thread}"
     )
+
+
 # --- The caller's prompt stays verbatim on replaying paths -----------------
 #
 # The proxy's coding profile turns user-message compression on so tool
@@ -2306,9 +2308,7 @@ def test_rtk_proxy_compound_wrapper_keeps_derived_output_compressible():
         "rg",
         ["-n", "request_scope", "headroom"],
     )
-    assert _bash_command_is_search(
-        "rtk proxy rg -n request_scope headroom", frozenset({"rg"})
-    )
+    assert _bash_command_is_search("rtk proxy rg -n request_scope headroom", frozenset({"rg"}))
     assert not _is_read_command("rtk proxy pytest -q tests/test_router.py")
     assert not _is_read_command("rtk proxy cat Cargo.lock")
     assert not _is_read_command("rtk proxy cat src/app.py > /tmp/app-copy.py")

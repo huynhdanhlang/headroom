@@ -197,6 +197,8 @@ def test_concurrent_apply_calls_leak_compression_policy_across_requests(
         "self._runtime_compression_policy leaked across concurrent "
         "requests on the shared ContentRouter singleton (#3486)."
     )
+
+
 # =============================================================================
 # PR #3556 review gap: the ContextVar fix only isolates the OUTER apply()
 # call. It does not propagate into the worker threads apply() itself spawns
