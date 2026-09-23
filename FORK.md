@@ -1,9 +1,9 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `bc21c9370793f7e4aa94ac4c5d9a67a8d2dd0df9` (package version 0.37.0).
+Upstream base: `1cb779e1bcaebad4cba113bf2106bcd9825bef40` (package version 0.38.0).
 
 The native/dependency base is the signed multi-architecture image
-`ghcr.io/headroomlabs-ai/headroom:code-bc21c93@sha256:cc517ad22cc1a0c4618cc1bdea612b345f9c0928c13958dae86c9f1d481c380d`.
+`ghcr.io/headroomlabs-ai/headroom:code-1cb779e@sha256:30b48fab93655e408afaff8c6941cda6a13c854adfc5645bf2ac434ed9ea3051`.
 
 This fork keeps the upstream compression/cache policy. Its maintenance changes are:
 
@@ -30,7 +30,7 @@ python scripts/build_ai_motion.py --check-only
 python scripts/build_ai_motion.py
 ```
 
-The runtime reports `0.37.0+amv.<commit>` and OCI labels identify the full fork commit.
+The runtime reports `0.38.0+amv.<commit>` and OCI labels identify the full fork commit.
 The image preserves the AI Motion manager entrypoint (`headroom`) so one image can run
 both `proxy` and `mcp serve`. Direct use must include the subcommand, for example
 `docker run --rm IMAGE proxy --port 8787`; upstream examples that append only `--port`
@@ -85,6 +85,15 @@ The upstream range changes Rust sources and dependency lockfiles, so it is suppl
 image above rather than copied through the Python overlay. The fork overlay contains only the accounting,
 request-scope, RTK-aware source-read protection, gateway Responses tool-identity protection, dashboard and
 build-contract differences from `bc21c937`.
+
+## Upstream synchronization through `1cb779e1`
+
+The 22 commits after `bc21c937` are integrated on the 0.38.0 native base. They add bounded
+request logging, budget enforcement on OpenAI/Gemini routes, safer dense-line and tabular
+handling, SmartCrusher JSON-field preservation, cache-aware pricing, and updated savings
+history/metrics. The Responses budget check runs before the fork's native-array token
+accounting; request scoping, exact read protection, gateway tool identity, and Agent Usage
+log-window accounting remain fork changes. The overlay is compared against `1cb779e1`.
 
 ## Performance and context maintenance
 
