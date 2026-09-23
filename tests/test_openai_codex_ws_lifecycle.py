@@ -564,6 +564,84 @@ async def test_ws_first_frame_compression_uses_bounded_executor(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_ws_large_first_frame_finishes_with_bounded_extended_deadline(monkeypatch):
+    """A multi-megabyte cold frame needs the 7.5s budget to avoid a 5s fail-open."""
+    frame = json.dumps(
+        {"type": "response.create", "response": {"model": "gpt-5.4", "input": "x" * 4_300_000}}
+    )
+    upstream = _FakeUpstream(
+        [
+            json.dumps({"type": "response.created", "response": {"id": "r_1"}}),
+            json.dumps({"type": "response.completed", "response": {"id": "r_1"}}),
+        ]
+    )
+    client_ws = _FakeWebSocket(frames=[frame])
+    handler = _DummyOpenAIHandler()
+    handler.config.optimize = True
+    monkeypatch.setattr(openai_module, "COMPRESSION_TIMEOUT_SECONDS", 30.0)
+    handler._compress_openai_responses_payload = MagicMock(
+        return_value=(
+            {"model": "gpt-5.4", "input": "compressed"},
+            True,
+            140_000,
+            ["router:test"],
+            "compressed",
+            len(frame),
+            100,
+            140_000,
+            {},
+        )
+    )
+
+    with patch.dict(sys.modules, {"websockets": _make_fake_websockets_module(upstream)}):
+        await handler.handle_openai_responses_ws(client_ws)
+
+    assert handler.compression_executor_timeouts == [7.5]
+    assert json.loads(upstream.sent[0])["response"]["input"] == "compressed"
+
+
+@pytest.mark.asyncio
+async def test_ws_large_later_frame_uses_the_same_bounded_deadline(monkeypatch):
+    """Large continuation frames receive the same budget as first frames."""
+    large_frame = json.dumps(
+        {"type": "response.create", "response": {"model": "gpt-5.4", "input": "x" * 4_300_000}}
+    )
+    upstream = _FakeUpstream([], hold_after_events=True)
+    client_ws = _FakeWebSocket(frames=[_first_frame(), large_frame], hold_after_initial=True)
+    handler = _DummyOpenAIHandler()
+    handler.config.optimize = True
+    monkeypatch.setattr(openai_module, "COMPRESSION_TIMEOUT_SECONDS", 30.0)
+    handler._compress_openai_responses_payload = MagicMock(
+        side_effect=lambda payload, **_kwargs: (
+            payload,
+            False,
+            0,
+            [],
+            "router_no_compression",
+            len(json.dumps(payload)),
+            len(json.dumps(payload)),
+            0,
+            {},
+        )
+    )
+
+    async def disconnect() -> None:
+        await asyncio.sleep(0.05)
+        client_ws.trigger_disconnect()
+
+    with patch.dict(sys.modules, {"websockets": _make_fake_websockets_module(upstream)}):
+        trigger = asyncio.create_task(disconnect())
+        try:
+            await asyncio.wait_for(handler.handle_openai_responses_ws(client_ws), timeout=2.0)
+        finally:
+            trigger.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await trigger
+
+    assert handler.compression_executor_timeouts == [5.0, 7.5]
+
+
+@pytest.mark.asyncio
 async def test_ws_first_frame_timeout_uses_timeout_reason(caplog, monkeypatch):
     """Codex WS compression timeout must stay bounded and visible."""
     upstream_events = [

@@ -107,5 +107,12 @@ connection/inference time separately from compression overhead. Cached tokens st
 narrow code reads, compact command results and deliberate task handoffs remain useful. Treat dollar counters
 as API-equivalent estimates, not subscription savings. Preserve meaningful source-read content and recoverability.
 
+Codex WebSocket frames below 4 MiB retain the 5-second compression deadline. Larger frames have a bounded
+7.5-second deadline: on this local workload, cold 5.6 MB frames finished 1–2.4 seconds after the old deadline,
+which otherwise forwarded the entire uncompressed context and briefly quarantined compression. The local
+manager may run eight tool-output workers; a synthetic 1,200-output fixture produced identical bytes and
+savings at four and eight workers, with lower compression time at eight. Neither setting proves provider
+latency or subscription-quota improvement.
+
 Use RTK for compact command output and Codegraph for indexed symbol/call-path lookup. Keep Codegraph's database
 local; use exact unfiltered output when a test failure or content hash needs it.

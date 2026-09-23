@@ -112,6 +112,8 @@ _OPENAI_RESPONSES_UNIT_CACHE_INIT_LOCK = threading.RLock()
 _OPENAI_RESPONSES_UNIT_EXECUTOR_LOCK = threading.RLock()
 _OPENAI_RESPONSES_UNIT_EXECUTOR: ThreadPoolExecutor | None = None
 _CODEX_WS_COMPRESSION_TIMEOUT_SECONDS = 5.0
+_CODEX_WS_LARGE_FRAME_MIN_CHARS = 4 * 1024 * 1024
+_CODEX_WS_LARGE_FRAME_TIMEOUT_SECONDS = 7.5
 # The WS->HTTP fallback streams SSE, so `read` is the gap BETWEEN events, not a
 # cap on the whole response: 120s of silence from a live Codex turn means the
 # upstream is gone, not thinking. That is this path's own bound and is
@@ -159,8 +161,19 @@ def _response_ccr_hashes(messages: list[dict[str, Any]], markers: list[str]) -> 
     return hashes
 
 
-def _codex_ws_compression_timeout_seconds() -> float:
-    return min(COMPRESSION_TIMEOUT_SECONDS, _CODEX_WS_COMPRESSION_TIMEOUT_SECONDS)
+def _codex_ws_compression_timeout_seconds(frame_chars: int = 0) -> float:
+    # Cold multi-megabyte frames have completed 1–2.4s after the 5s deadline
+    # in this deployment. Let those bounded workers finish so a full-history
+    # frame can be compressed instead of timing out, forwarding 700k tokens,
+    # and briefly quarantining the executor. Small frames retain the 5s cap.
+    # len(str) is O(1) and a lower bound on UTF-8 bytes, avoiding another
+    # multi-megabyte encode merely to choose a timeout.
+    budget = (
+        _CODEX_WS_LARGE_FRAME_TIMEOUT_SECONDS
+        if frame_chars >= _CODEX_WS_LARGE_FRAME_MIN_CHARS
+        else _CODEX_WS_COMPRESSION_TIMEOUT_SECONDS
+    )
+    return min(COMPRESSION_TIMEOUT_SECONDS, budget)
 
 
 _WS_ALLOWED_ORIGINS_ENV = "HEADROOM_WS_ORIGINS"
@@ -7834,7 +7847,7 @@ class OpenAIHandlerMixin:
                                 _inner,
                                 model=_model,
                                 request_id=request_id,
-                                timeout=_codex_ws_compression_timeout_seconds()
+                                timeout=_codex_ws_compression_timeout_seconds(len(first_msg_raw))
                                 if client == "codex"
                                 else COMPRESSION_TIMEOUT_SECONDS,
                                 client=client,
@@ -8226,7 +8239,9 @@ class OpenAIHandlerMixin:
                                     inner_payload,
                                     model=model_for_frame,
                                     request_id=request_id,
-                                    timeout=_codex_ws_compression_timeout_seconds()
+                                    timeout=_codex_ws_compression_timeout_seconds(
+                                        len(raw_after_store)
+                                    )
                                     if client == "codex"
                                     else COMPRESSION_TIMEOUT_SECONDS,
                                     client=client,
