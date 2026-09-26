@@ -575,6 +575,7 @@ def test_custom_tool_call_commands_handles_javascript_literals_conservatively():
     from headroom.transforms.content_router import (
         _custom_tool_call_commands,
         _is_read_command,
+        _tool_call_command_text,
     )
 
     assert _custom_tool_call_commands(None) == []
@@ -582,8 +583,98 @@ def test_custom_tool_call_commands_handles_javascript_literals_conservatively():
     assert _custom_tool_call_commands("*** Begin Patch\n*** Update File: f.py\n") == []
     assert _custom_tool_call_commands("tools.exec_command({cmd: 'cat f'})") == ["cat f"]
     uncertain = _custom_tool_call_commands("tools.exec_command(notJson)")
-    assert len(uncertain) == 1
-    assert _is_read_command(uncertain[0]), "unknown exec output must fail closed to exact bytes"
+    assert uncertain == [None]
+    assert _is_read_command(_tool_call_command_text("tools.exec_command(notJson)"))
+    assert _is_read_command(
+        _tool_call_command_text(
+            'tools.exec_command({cmd: "ls"}); tools.exec_command({cmd: "c" + "at f"})'
+        )
+    )
+
+
+def test_custom_tool_call_commands_marks_non_literal_cmd_unknown():
+    """A cmd that is not a whole string literal may still be a read: None, not skipped."""
+    from headroom.transforms.content_router import _custom_tool_call_commands
+
+    for script in (
+        "tools.exec_command(notJson)",
+        "tools.exec_command({cmd: someVariable})",
+        "tools.exec_command({cmd: `cat ${f}`})",
+        'tools.exec_command({cmd:"c"+"at f"})',
+        "tools.exec_command({cmd: 'c' + 'at f', workdir: '/repo'})",
+        'tools.exec_command({cmd: "cat f".trim()})',
+        'tools.exec_command({cmd: "c\\x61t f"})',
+        'tools.exec_command({cmd: "c\\u0061t f"})',
+    ):
+        assert _custom_tool_call_commands(script) == [None], script
+    # The known commands around an unknown one are still returned, in order.
+    assert _custom_tool_call_commands(
+        'tools.exec_command({cmd: "ls"}); tools.exec_command({cmd: "c" + "at f"});'
+    ) == ["ls", None]
+
+
+def test_custom_tool_call_commands_parses_javascript_object_literals():
+    """Codex usually writes the argument as a JS literal, not JSON (bare `cmd` key)."""
+    from headroom.transforms.content_router import _custom_tool_call_commands
+
+    script = (
+        'const a = await tools.exec_command({cmd:"cat /tmp/app.js","workdir":"/tmp"});\n'
+        "const b = await tools.exec_command({cmd: 'sed -n \\'1,80p\\' f.py', workdir: '/repo'});\n"
+        "const c = await tools.exec_command({ workdir: '/repo', cmd: `nl -ba f.py` });\n"
+        'const d = await tools.exec_command({cmd: "rg -n \\"def f\\" src", yield_time_ms: 1000});\n'
+        "const e = await tools.exec_command({'cmd': 'head -n 5 f.py'});\n"
+    )
+    assert _custom_tool_call_commands(script) == [
+        "cat /tmp/app.js",
+        "sed -n '1,80p' f.py",
+        "nl -ba f.py",
+        'rg -n "def f" src',
+        "head -n 5 f.py",
+    ]
+
+
+def test_responses_codex_exec_javascript_literal_read_stays_verbatim(monkeypatch):
+    """The same read with Codex's usual bare-key argument must also stay verbatim."""
+    monkeypatch.setenv("HEADROOM_PROTECT_READS", "1")
+    handler = _handler_with_router(_lossy_router())
+    output = _codex_exec_output("call_exec", _NL_OUTPUT)
+    call = {
+        "type": "custom_tool_call",
+        "call_id": "call_exec",
+        "name": "exec",
+        "input": (
+            'const r = await tools.exec_command({cmd: "nl -ba tenacity/wait.py | '
+            'sed -n \'20,115p\'", workdir: "/repo", yield_time_ms: 10000});\n'
+            "text(r.output);\n"
+        ),
+    }
+    payload = {"model": "gpt-5", "input": [call, output]}
+
+    new_payload, _modified, _s, _t, _u, _c, _a = _run(handler, payload)
+
+    assert new_payload["input"][1] == output
+
+
+def test_responses_codex_exec_concatenated_cmd_stays_verbatim(monkeypatch):
+    """`"c" + "at f"` runs `cat f`: an unparsed cmd must not release the read."""
+    monkeypatch.setenv("HEADROOM_PROTECT_READS", "1")
+    handler = _handler_with_router(_lossy_router())
+    output = _codex_exec_output("call_exec", _NL_OUTPUT)
+    call = {
+        "type": "custom_tool_call",
+        "call_id": "call_exec",
+        "name": "exec",
+        "input": (
+            'const r = await tools.exec_command({cmd: "c" + "at tenacity/wait.py", '
+            'workdir: "/repo"});\n'
+            "text(r.output);\n"
+        ),
+    }
+    payload = {"model": "gpt-5", "input": [call, output]}
+
+    new_payload, _modified, _s, _t, _u, _c, _a = _run(handler, payload)
+
+    assert new_payload["input"][1] == output
 
 
 def test_responses_codex_exec_read_stays_verbatim(monkeypatch):

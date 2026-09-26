@@ -1,9 +1,9 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `1cb779e1bcaebad4cba113bf2106bcd9825bef40` (package version 0.38.0).
+Upstream base: `66f426171bab32692cf93d2b656a8e4be9004186` (package version 0.39.0).
 
 The native/dependency base is the signed multi-architecture image
-`ghcr.io/headroomlabs-ai/headroom:code-1cb779e@sha256:30b48fab93655e408afaff8c6941cda6a13c854adfc5645bf2ac434ed9ea3051`.
+`ghcr.io/headroomlabs-ai/headroom:code-66f4261@sha256:4f6a6dd5026c28e985b1155773b49add31e6474868b77135945b5ad3f02f11fc`.
 
 This fork keeps the upstream compression/cache policy. Its maintenance changes are:
 
@@ -30,7 +30,7 @@ python scripts/build_ai_motion.py --check-only
 python scripts/build_ai_motion.py
 ```
 
-The runtime reports `0.38.0+amv.<commit>` and OCI labels identify the full fork commit.
+The runtime reports `0.39.0+amv.<commit>` and OCI labels identify the full fork commit.
 The image preserves the AI Motion manager entrypoint (`headroom`) so one image can run
 both `proxy` and `mcp serve`. Direct use must include the subcommand, for example
 `docker run --rm IMAGE proxy --port 8787`; upstream examples that append only `--port`
@@ -61,9 +61,9 @@ Pending PRs are reviewed by exact head/commit and tested against this fork; they
 | #3487 | Integrated its two implementation/test commits, then adapted | Context-local options alone did not scope tool maps, read protection, reused workers, or Responses worker contexts. |
 | #3556 | Integrated, then adapted | Its tests and upstream behavior are retained; the fork keeps broader scoping, caller restoration, reused-worker cleanup, and Responses/watchdog/fan-out context propagation. |
 | #3562 | Deferred | Its bare retrieval tool can reach unsupported Codex subscription streams and changes cached tool schemas. |
-| #3256 | Deferred pending a cache-specific benchmark | Our base already has deadline-based SQLite expiry purging; the older PR also changes eviction/backing-store lifecycle. |
+| #3256 | Integrated with upstream 0.39.0 | The upstream TTL sweep change is in the pinned native base; do not cherry-pick it again. |
 | #3385 | Deferred | Automatic repricing can mix message and schema savings and rewrite historical totals inconsistently. |
-| #3373 | Deferred as low priority for this local workload | Current low key cardinality does not exercise its over-capacity cleanup bottleneck. |
+| #3373 | Integrated with upstream 0.39.0 | The constant-time rate-limiter bucket check is in the pinned native base. |
 
 The adaptation scopes all request options, tool-call maps and read-protection sets; copied worker contexts preserve
 those values, and request exit restores the caller's state. Both `apply()` and the native Responses unit path
@@ -94,6 +94,18 @@ handling, SmartCrusher JSON-field preservation, cache-aware pricing, and updated
 history/metrics. The Responses budget check runs before the fork's native-array token
 accounting; request scoping, exact read protection, gateway tool identity, and Agent Usage
 log-window accounting remain fork changes. The overlay is compared against `1cb779e1`.
+
+## Upstream synchronization through `66f42617` (0.39.0)
+
+The 0.39.0 native/dependency base includes upstream cache-prefix, stream,
+security, request-budget, tool-search, and Kompress deadline fixes. The fork
+keeps request-scope restoration across reused workers, exact source-read
+protection, Responses accounting, dashboard log-window accounting, and its
+bounded large-frame deadline. The Codex JavaScript command parser adopts
+upstream's whole-literal fail-closed checks; uncertain commands still protect
+their output. Request-scoped Kompress timing uses the fork's existing ContextVar
+scope rather than a second state mechanism. Native and dependency changes come
+from the pinned 0.39.0 base, not the overlay.
 
 ## Performance and context maintenance
 
