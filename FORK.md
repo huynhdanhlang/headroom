@@ -1,9 +1,9 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `66f426171bab32692cf93d2b656a8e4be9004186` (package version 0.39.0).
+Upstream base: `7968122658c31c06ef3e5b1fe7911c8cb0a79ade` (0.39.0 plus upstream TPM hotfix).
 
 The native/dependency base is the signed multi-architecture image
-`ghcr.io/headroomlabs-ai/headroom:code-66f4261@sha256:4f6a6dd5026c28e985b1155773b49add31e6474868b77135945b5ad3f02f11fc`.
+`ghcr.io/headroomlabs-ai/headroom:code-7968122@sha256:d8bf64a97cec0717930b658f89241f3043124694b2d95013bdb855e8976a31e7`.
 
 This fork keeps the upstream compression/cache policy. Its maintenance changes are:
 
@@ -106,6 +106,17 @@ upstream's whole-literal fail-closed checks; uncertain commands still protect
 their output. Request-scoped Kompress timing uses the fork's existing ContextVar
 scope rather than a second state mechanism. Native and dependency changes come
 from the pinned 0.39.0 base, not the overlay.
+
+## Post-release synchronization through `79681226`
+
+The single post-0.39.0 upstream commit fixes TPM rate-limit accounting for
+requests larger than one minute of configured capacity, so a large-context
+request cannot leave its bucket refusing traffic forever. It changes Python
+code and tests only; the pinned `code-7968122` image supplies that exact
+upstream runtime while the fork overlay remains limited to its five changed
+Python/frontend files. Keep this hotfix with the existing Responses and
+request-scope protections; verify large-context admission and retry behavior
+before updating the live proxy.
 
 ## Performance and context maintenance
 
