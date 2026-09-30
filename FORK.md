@@ -1,9 +1,17 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `7968122658c31c06ef3e5b1fe7911c8cb0a79ade` (0.39.0 plus upstream TPM hotfix).
+Upstream base: `ffc6edb4ba7a775d2f6440769b626132a66aa7d3` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the signed multi-architecture image
-`ghcr.io/headroomlabs-ai/headroom:code-7968122@sha256:d8bf64a97cec0717930b658f89241f3043124694b2d95013bdb855e8976a31e7`.
+`ghcr.io/headroomlabs-ai/headroom:code-ffc6edb@sha256:5f34339e916b45cdc5d680d7ff65d50f63ecabc1158343b3bcaf7464cdd03c92`.
+
+## 2026-09-30 upstream sync
+
+Integrated the 33 commits after 7968122, including native/dependency updates,
+CCR retrieval/cache ordering, unmarked HTML protection and security gates.
+Preserved the fork's ContextVar request isolation and shared compression deadline,
+source-read protection, bounded accounting, parallelism and deployment configuration.
+The only merge conflict was adjacent router documentation; both behaviors remain.
 
 This fork keeps the upstream compression/cache policy. Its maintenance changes are:
 
