@@ -38,7 +38,7 @@ python scripts/build_ai_motion.py --check-only
 python scripts/build_ai_motion.py
 ```
 
-The runtime reports `0.39.0+amv.<commit>` and OCI labels identify the full fork commit.
+The runtime reports `0.39.1+amv.<commit>` and OCI labels identify the full fork commit.
 The image preserves the AI Motion manager entrypoint (`headroom`) so one image can run
 both `proxy` and `mcp serve`. Direct use must include the subcommand, for example
 `docker run --rm IMAGE proxy --port 8787`; upstream examples that append only `--port`
