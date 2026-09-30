@@ -1,9 +1,23 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `ffc6edb4ba7a775d2f6440769b626132a66aa7d3` (0.39.1 plus latest upstream main fixes).
+Upstream base: `0a2c80d5207642a5e58ba9eb65e19cd004018642` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the signed multi-architecture image
-`ghcr.io/headroomlabs-ai/headroom:code-ffc6edb@sha256:5f34339e916b45cdc5d680d7ff65d50f63ecabc1158343b3bcaf7464cdd03c92`.
+`ghcr.io/headroomlabs-ai/headroom:code-0a2c80d@sha256:24a2fd037f7f9cf6a186e7e87a387b151681726d412f9c981563a5d39c256ba1`.
+
+## 2026-10-01 upstream sync
+
+Integrated 22 commits after ffc6edb, including memoized OpenAI token counting,
+code UTF-8 mapping performance, Codex exec-envelope/source-read protection,
+coding-profile protection and token-correct compression fallback accounting.
+Preserved all fork request isolation, bounded deadlines, exact retrieval and
+Responses/dashboard accounting. Combined both sides of the read-protection test
+conflict so neither upstream nor fork regression coverage is lost.
+
+The local manager keeps `TIKTOKEN_CACHE_DIR=/headroom/cache/tiktoken` on its
+persistent cache volume. Prewarm and verify all four tokenizer encodings offline
+before cutover: ephemeral `/tmp` vocab downloads exceeded the bounded loader's
+timeout in the test candidate. This changes no counting/compression thresholds.
 
 ## 2026-09-30 upstream sync
 
