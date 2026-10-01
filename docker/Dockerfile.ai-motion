@@ -1,5 +1,5 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-0a2c80d@sha256:24a2fd037f7f9cf6a186e7e87a387b151681726d412f9c981563a5d39c256ba1
+FROM ghcr.io/headroomlabs-ai/headroom:code-f824a27@sha256:f917af8f7f31ef7b1d4bff84b9173f2fa86d26399ef53342d52f864217d8d6f2
 ARG FORK_COMMIT
 USER root
 COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py

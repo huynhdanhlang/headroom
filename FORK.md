@@ -1,9 +1,18 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `0a2c80d5207642a5e58ba9eb65e19cd004018642` (0.39.1 plus latest upstream main fixes).
+Upstream base: `f824a270f132516443deeef2555076bf4cd40a34` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the signed multi-architecture image
-`ghcr.io/headroomlabs-ai/headroom:code-0a2c80d@sha256:24a2fd037f7f9cf6a186e7e87a387b151681726d412f9c981563a5d39c256ba1`.
+`ghcr.io/headroomlabs-ai/headroom:code-f824a27@sha256:f917af8f7f31ef7b1d4bff84b9173f2fa86d26399ef53342d52f864217d8d6f2`.
+
+## Synchronization through f824a270 (2026-10-01)
+
+Integrated 28 commits after 0a2c80d: dependency security patches, protected JSON
+record spans, memory SQLite connection cleanup, bounded HNSW eviction,
+corrupt-row handling and credential-safe shared-proxy routing. The merge is
+conflict-free; all five fork runtime overlays and persistent tokenizer cache
+remain. Per-message diagnostics and keep-last-turns are opt-in: do not enable
+history trimming globally or weaken cached-prefix/source-read protections.
 
 ## 2026-10-01 upstream sync
 
