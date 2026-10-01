@@ -1,5 +1,5 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-c46e7cc@sha256:2ef8487524dddaabba3abd36f830bef3649a99a6f090a51facb783ae8e9fa0f3
+FROM ghcr.io/headroomlabs-ai/headroom:code-3080a9d@sha256:046b5fb603c5ebc8b8d28628039626531c6d8a2fa69247ed2d29d3c9df8ff8cd
 ARG FORK_COMMIT
 USER root
 COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
@@ -7,9 +7,6 @@ COPY headroom/proxy/gateway_responses.py /usr/local/lib/python3.13/site-packages
 COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
 COPY headroom/transforms/content_router.py /usr/local/lib/python3.13/site-packages/headroom/transforms/content_router.py
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
-COPY headroom/cache/prefix_tracker.py /usr/local/lib/python3.13/site-packages/headroom/cache/prefix_tracker.py
-COPY headroom/cli/wrap.py /usr/local/lib/python3.13/site-packages/headroom/cli/wrap.py
-COPY headroom/proxy/passthrough.py /usr/local/lib/python3.13/site-packages/headroom/proxy/passthrough.py
 RUN python -c 'import os,re,sys; from pathlib import Path; revision=os.environ.get("FORK_COMMIT",""); re.fullmatch(r"[a-f0-9]{40}",revision) or sys.exit("FORK_COMMIT must identify the exact clean fork commit"); version="0.39.1+amv."+revision[:12]; Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = "+repr(version)+"\n")'
 LABEL org.opencontainers.image.source="https://github.com/huynhdanhlang/headroom"
 LABEL org.opencontainers.image.revision="${FORK_COMMIT}"
