@@ -75,6 +75,33 @@ def _make_mock_backend_with_usage(usage: dict) -> MagicMock:
     return backend
 
 
+def test_default_chat_upstream_records_openai_provider():
+    """A resolved default upstream is not a client-supplied custom base."""
+    import httpx
+    import respx
+
+    config = ProxyConfig(
+        optimize=False,
+        cache_enabled=False,
+        rate_limit_enabled=False,
+    )
+    body = _make_mock_backend().send_openai_message.return_value.body
+    with respx.mock(assert_all_called=False) as router:
+        router.post("https://api.openai.com/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=body)
+        )
+        app = create_app(config)
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/chat/completions",
+                json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hello"}]},
+                headers={"Authorization": "Bearer test-key"},
+            )
+            assert response.status_code == 200, response.text
+            recent = app.state.proxy.logger.get_recent(1)
+            assert recent[0]["provider"] == "openai"
+
+
 def test_chat_completions_survives_null_usage_token_counts():
     """A backend that reports present-but-null token counts must not 500.
 

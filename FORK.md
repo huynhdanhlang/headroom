@@ -1,9 +1,22 @@
 # AI Motion Headroom maintenance fork
 
-Upstream base: `c46e7cc6514ec49a039537c9f0e984f2c9e6327a` (0.39.1 plus latest upstream main fixes).
+Integrated upstream source: `f0ec2bb37697b1addccb416bd626e7bf3c5ea835` (0.39.1 plus latest upstream main fixes).
+Native/dependency source anchor: `c46e7cc6514ec49a039537c9f0e984f2c9e6327a`.
 
 The native/dependency base is the signed multi-architecture image
 `ghcr.io/headroomlabs-ai/headroom:code-c46e7cc@sha256:2ef8487524dddaabba3abd36f830bef3649a99a6f090a51facb783ae8e9fa0f3`.
+
+## Python-only synchronization through f0ec2bb3 (2026-10-02)
+
+Integrated three commits for message/tool-call cache markers, fixed provider
+telemetry labels and the Codex embedded-mode notice. No dependency/native files
+changed. While the exact upstream image is unpublished, the build-guard-checked
+additive overlay supplies all eight changed runtime files on the unchanged c46
+native base; no source substitution or runtime deletion is permitted.
+
+The fork corrects the telemetry fallback to check a client custom-base header or
+a changed resolved destination, not a merely nonempty upstream URL. A failing HTTP-route regression reproduced
+default OpenAI traffic being logged as `custom`; keep that traffic in `openai`.
 
 ## Synchronization through c46e7cc6 (2026-10-02)
 
