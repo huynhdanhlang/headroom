@@ -1,11 +1,28 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `3080a9d44c77fa7aeb9561f8d3405afbd74e7f86` (0.39.1 plus latest upstream main fixes).
+Integrated upstream source and native/dependency anchor: `d5318ac235595b9740fccb0910ec7139c42d51a0` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-36900402341's `digests-code-amd64` artifact (the per-platform smoke test passed):
-`ghcr.io/headroomlabs-ai/headroom:code-3080a9d@sha256:046b5fb603c5ebc8b8d28628039626531c6d8a2fa69247ed2d29d3c9df8ff8cd`.
+36963024403's `digests-code-amd64` artifact (the per-platform smoke test passed):
+`ghcr.io/headroomlabs-ai/headroom:code-d5318ac@sha256:c8a1968339778a462ec4b39dc443a1abbad56ac114bc3bea143549a52a73400e`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through d5318ac2 (2026-10-02)
+
+Integrated 28 upstream commits, including tenant-isolated TOIN learning, bounded
+metrics and ONNX threads, chained-shell source-read protection, Codex dashboard
+traffic, persistent learner evidence and safer public errors. Dependency changes
+come from the exact matching native image; the five fork overlays remain.
+Resolved the overlapping OpenAI provider fix and secure rate-key test by retaining
+the fork's destination-aware provider check and opaque rate-key fixture. Preserve
+context, cache prefixes, request isolation, deadlines and live configuration.
+Usage reporting remains opt-in; do not enable it during installation.
+Historical Responses message compression is retained for token mode only:
+cache mode preserves messages byte-for-byte across turns. A two-turn regression
+reproduced the new upstream prefix mutation before this guard was added.
+This installation is single-user and has no tenant-ID gateway. Upstream explicit
+tenant headers still strip/truncate IDs and can alias distinct namespaces; do not
+enable shared-tenant routing without collision-resistant normalization and tests.
 
 ## Synchronization through 3080a9d4 (2026-10-02)
 

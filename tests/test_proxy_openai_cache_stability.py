@@ -20,6 +20,7 @@ from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
 from headroom.backends.base import BackendResponse
 from headroom.observability import HeadroomOtelMetrics, reset_otel_metrics, set_otel_metrics
+from headroom.proxy.handlers.openai import _openai_rate_limit_key
 from headroom.proxy.server import ProxyConfig, create_app
 from tests.test_observability_metrics import _collect_metrics
 
@@ -1284,8 +1285,6 @@ def test_openai_chat_custom_base_flood_cannot_grow_the_provider_set(
     zai_base = "https://api.z.ai/api/coding/paas/v4"
     limited_auth = "Bearer rate-limited"
     # This fork uses opaque credential identities rather than raw bearer tokens.
-    from headroom.proxy.handlers.openai import _openai_rate_limit_key
-
     limited_key = _openai_rate_limit_key({"authorization": limited_auth})
     # The flood hosts are unresolvable on purpose; without this stub the SSRF
     # guard would drop the override and relabel the flood as "openai".
