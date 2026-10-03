@@ -1,11 +1,26 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `d5318ac235595b9740fccb0910ec7139c42d51a0` (0.39.1 plus latest upstream main fixes).
+Integrated upstream source and native/dependency anchor: `9a72bc024263e2470626fae7f20430db682e0042` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-36963024403's `digests-code-amd64` artifact (the per-platform smoke test passed):
-`ghcr.io/headroomlabs-ai/headroom:code-d5318ac@sha256:c8a1968339778a462ec4b39dc443a1abbad56ac114bc3bea143549a52a73400e`.
+37097682501's `digests-code-amd64` artifact (the per-platform smoke test passed):
+`ghcr.io/headroomlabs-ai/headroom:code-9a72bc0@sha256:59f5d3967f92014699e657c4d379a8348ee7f5bc5caa3992e1bfefef8b0c6f55`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 9a72bc02 (2026-10-03)
+
+Integrated 14 upstream commits without conflicts: proxy-token scrubbing, local
+operator-only usage polling, OAuth minting only before upstream requests, Gemini
+forwarded-prefix replay and media preservation, isolated timed-out image workers,
+external-compressor fallback, stable learner items and savings audit output.
+The exact matching image supplies upstream runtime; the six fork overlays keep
+cache-mode Responses messages immutable, request isolation, bounded compression,
+source-read protection and consistent accounting. Live model, context, persistent
+tokenizer cache, parallelism and security settings are unchanged.
+The upstream learner lifecycle regression reproduced expired categories surviving
+in AGENTS.md: managed-block sanitization escaped pattern-ID comment endings. The
+writer now recognizes the inert escaped marker without unescaping content or
+weakening injection protection. Existing deletion/preservation regressions cover it.
 
 ## Synchronization through d5318ac2 (2026-10-02)
 
