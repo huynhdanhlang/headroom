@@ -8,9 +8,11 @@
   "files": [
     "dist",
     "hook-shim",
-    "README.md"
+    "README.md",
+    "scripts/benchmark-proxy.mjs"
   ],
   "scripts": {
+    "benchmark:proxy": "node scripts/benchmark-proxy.mjs",
     "build": "tsup",
     "build:standalone": "tsup --config tsup.standalone.config.ts",
     "test": "vitest run",
@@ -38,6 +40,7 @@
     }
   },
   "devDependencies": {
+    "@opencode/plugin": "2.0.22",
     "@types/node": "^26.1.1",
     "@typescript/native": "npm:typescript@^7.0.2",
     "tsup": "^8.0.0",
