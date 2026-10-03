@@ -1,11 +1,28 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `9a72bc024263e2470626fae7f20430db682e0042` (0.39.1 plus latest upstream main fixes).
+Integrated upstream source and native/dependency anchor: `2bc94194671548c5def53809f736340285e20e76` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37097682501's `digests-code-amd64` artifact (the per-platform smoke test passed):
-`ghcr.io/headroomlabs-ai/headroom:code-9a72bc0@sha256:59f5d3967f92014699e657c4d379a8348ee7f5bc5caa3992e1bfefef8b0c6f55`.
+37100184479's `digests-code-amd64` artifact (the per-platform smoke test passed):
+`ghcr.io/headroomlabs-ai/headroom:code-2bc9419@sha256:31293e207d978289a3fff218a98afd69e0f201a348f71510a0f90700f90c6437`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 2bc94194 (2026-10-03)
+
+Integrated four commits: bounded relevance segments, quiet telemetry/nag defaults,
+response-size logging and the dashboard CO2 estimate. The eleven runtime overlays
+retain request isolation, cached-prefix/source-read protection, learner lifecycle,
+deadlines and accounting. Context, model and live performance settings are unchanged.
+CO2 is a modeled estimate, not measured energy or verified subscription savings.
+Match the most specific model family first: the upstream insertion-order matcher
+incorrectly treated GPT-4o and GPT-4o-mini as GPT-4. A failing regression covers
+the declared factors, including dated and uppercase model names.
+Includes the user-authorized OpenCode V2 native request-hook adapter, its directory
+entry and rebuilt V1/V2 bundles. The plugin is typed against OpenCode 2.0.22; both
+entries remain available. Bundle dependency changes are self-contained JS artifacts,
+not a substitution of the pinned Python/native dependency base. Build in the clean
+attached worktree and fast-forward the main checkout only after verifying the copied
+OpenCode changes, preserving the user's exact development files.
 
 ## Synchronization through 9a72bc02 (2026-10-03)
 

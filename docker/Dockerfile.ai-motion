@@ -1,11 +1,16 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-9a72bc0@sha256:59f5d3967f92014699e657c4d379a8348ee7f5bc5caa3992e1bfefef8b0c6f55
+FROM ghcr.io/headroomlabs-ai/headroom:code-2bc9419@sha256:31293e207d978289a3fff218a98afd69e0f201a348f71510a0f90700f90c6437
 ARG FORK_COMMIT
 USER root
 COPY headroom/learn/writer.py /usr/local/lib/python3.13/site-packages/headroom/learn/writer.py
+COPY headroom/providers/opencode/_dist/entry.opencode.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.js
+COPY headroom/providers/opencode/_dist/entry.opencode.v2.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.v2.js
+COPY headroom/providers/opencode/_dist/v2/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/index.js
+COPY headroom/providers/opencode/_dist/v2/package.json /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/package.json
 COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
 COPY headroom/proxy/gateway_responses.py /usr/local/lib/python3.13/site-packages/headroom/proxy/gateway_responses.py
 COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
+COPY headroom/proxy/savings_tracker.py /usr/local/lib/python3.13/site-packages/headroom/proxy/savings_tracker.py
 COPY headroom/transforms/content_router.py /usr/local/lib/python3.13/site-packages/headroom/transforms/content_router.py
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
 RUN python -c 'import os,re,sys; from pathlib import Path; revision=os.environ.get("FORK_COMMIT",""); re.fullmatch(r"[a-f0-9]{40}",revision) or sys.exit("FORK_COMMIT must identify the exact clean fork commit"); version="0.39.1+amv."+revision[:12]; Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = "+repr(version)+"\n")'

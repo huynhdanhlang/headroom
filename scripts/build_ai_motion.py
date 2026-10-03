@@ -10,8 +10,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
-UPSTREAM_BASE = "9a72bc024263e2470626fae7f20430db682e0042"
-BASE_IMAGE = "ghcr.io/headroomlabs-ai/headroom:code-9a72bc0@sha256:59f5d3967f92014699e657c4d379a8348ee7f5bc5caa3992e1bfefef8b0c6f55"
+UPSTREAM_BASE = "2bc94194671548c5def53809f736340285e20e76"
+BASE_IMAGE = "ghcr.io/headroomlabs-ai/headroom:code-2bc9419@sha256:31293e207d978289a3fff218a98afd69e0f201a348f71510a0f90700f90c6437"
 SITE_PACKAGES = "/usr/local/lib/python3.13/site-packages/"
 NATIVE_INPUTS = {"pyproject.toml", "uv.lock", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"}
 
