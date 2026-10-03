@@ -56,3 +56,7 @@ jobs:
           cmp dist-standalone/hook-shim/handler.js \
             ../../headroom/providers/opencode/hook-shim/handler.js \
             || { echo "::error::headroom/providers/opencode/hook-shim/handler.js is stale - run 'npm run build:standalone' in plugins/opencode and commit the result"; exit 1; }
+          for artifact in entry.opencode.v2.js v2/index.js v2/package.json; do
+            cmp "dist-standalone/$artifact" "../../headroom/providers/opencode/_dist/$artifact" \
+              || { echo "::error::OpenCode V2 wheel artifact $artifact is stale"; exit 1; }
+          done

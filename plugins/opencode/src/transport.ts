@@ -346,6 +346,15 @@ function withRoutedFetchInput(
   return [nextUrl, nextInit];
 }
 
+/** Route a single host-owned request without installing process-global shims. */
+export function routeHeadroomRequest(request: Request, options: InstallOptions): Request {
+  const excludes = normalizeExcludeHosts(options.excludeHosts ?? process.env[EXCLUDE_HOSTS_ENV] ?? "");
+  const [input, init] = withRoutedFetchInput(
+    request, undefined, normalizeProxyUrl(options.proxyUrl), options.project, excludes,
+  );
+  return input === request && init === undefined ? request : new Request(input, init);
+}
+
 function splitNodeArgs(args: unknown[]): NodeRequestParts {
   const callback = typeof args.at(-1) === "function" ? (args.at(-1) as (...args: unknown[]) => unknown) : undefined;
   const withoutCallback = callback ? args.slice(0, -1) : args;

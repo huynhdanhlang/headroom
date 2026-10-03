@@ -1,15 +1,7 @@
 import type { CompressResult } from "headroom-ai";
 import { compress } from "headroom-ai";
-
-let _proxyUrlCache: string | null = null;
-
-export function setDefaultProxyUrl(url: string): void {
-  _proxyUrlCache = url;
-}
-
-export function getDefaultProxyUrl(): string {
-  return _proxyUrlCache ?? process.env.HEADROOM_BASE_URL ?? "http://localhost:8787";
-}
+import { getDefaultProxyUrl } from "./proxy-url.js";
+export { getDefaultProxyUrl, setDefaultProxyUrl } from "./proxy-url.js";
 
 export interface RetrieveToolConfig {
   proxyBaseUrl: string;

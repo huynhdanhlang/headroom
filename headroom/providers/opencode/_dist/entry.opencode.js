@@ -12426,11 +12426,16 @@ function tool(input) {
 }
 tool.schema = external_exports;
 
-// src/retrieve.ts
-var _proxyUrlCache = null;
+// src/proxy-url.ts
+var proxyUrlCache = null;
 function getDefaultProxyUrl() {
-  return _proxyUrlCache ?? process.env.HEADROOM_BASE_URL ?? "http://localhost:8787";
+  return proxyUrlCache ?? process.env.HEADROOM_BASE_URL ?? "http://localhost:8787";
 }
+function resolveProxyUrl(options) {
+  return (options?.proxyUrl ?? process.env.HEADROOM_PROXY_URL ?? process.env.HEADROOM_BASE_URL ?? getDefaultProxyUrl()).replace(/\/+$/, "");
+}
+
+// src/retrieve.ts
 function createHeadroomRetrieveTool(config2) {
   const origin = config2.proxyBaseUrl.replace(/\/+$/, "");
   return {
@@ -12895,14 +12900,6 @@ function uninstallHeadroomTransport() {
 }
 
 // src/plugin.ts
-function normalizeProxyUrl2(url2) {
-  return url2.replace(/\/+$/, "");
-}
-function resolveProxyUrl(options) {
-  return normalizeProxyUrl2(
-    options?.proxyUrl ?? process.env.HEADROOM_PROXY_URL ?? process.env.HEADROOM_BASE_URL ?? getDefaultProxyUrl()
-  );
-}
 var HeadroomPlugin = async (input, options = {}) => {
   const pluginOptions = options;
   const proxyUrl = resolveProxyUrl(pluginOptions);

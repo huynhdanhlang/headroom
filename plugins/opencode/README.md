@@ -3,7 +3,7 @@
 OpenCode integration helpers for Headroom. The package supports two integration paths:
 
 1. Provider config helpers used by `headroom wrap opencode` and persistent installs.
-2. A native OpenCode plugin that installs Headroom transport interception and exposes the retrieve tool.
+2. Native OpenCode plugins: the V1 transport factory and the V2 request-hook adapter.
 
 ## Install
 
@@ -69,6 +69,42 @@ or, for `headroom wrap opencode` and spawned Node child processes, set the envir
 ```bash
 HEADROOM_OPENCODE_EXCLUDE_HOSTS="opencode.ai,.corp.internal" headroom wrap opencode
 ```
+
+## Native OpenCode V2
+
+OpenCode V2 requires an `id/setup` object; the V1 factory entry is not compatible.
+Build with `npm run build:standalone` and use the absolute directory path
+`headroom/providers/opencode/_dist/v2` as `plugins[].package`. OpenCode 2.0.22
+requires a directory, not a file. Both builds generate the `v2` package directory;
+copy `dist-standalone/entry.opencode.v2.js` and `dist-standalone/v2/` together into
+the wheel's `_dist/` when updating it. CI verifies all three artifacts. Its entry delegates to the single self-contained
+`entry.opencode.v2.js` bundle next to it.
+Pass `options.proxyUrl` for the existing local proxy; the default is port 8787.
+The same `project` and `excludeHosts` options apply.
+
+The adapter uses V2's `http.request` hook and the existing endpoint/header router.
+It preserves model IDs, Fast parameters, auth, signed reasoning, tool schemas,
+request bytes, cancellation and project isolation. It does not patch global fetch,
+spawn Node shims, change credentials or substitute provider/model configuration.
+This entry covers HTTP model requests, including title/compaction calls; it is not
+a WebSocket interceptor. The tested ChatGPT token-sharing integration uses HTTP.
+Connection-refused failures for a routed loopback proxy stop promptly; other
+failures use OpenCode's ordinary recovery, without silently going direct.
+
+Keep the Headroom MCP connection for compression, retrieval and stats. Existing
+client-side tool-result compression can coexist: the client stores its compressed
+result once, while the proxy's cache mode preserves the repeated request prefix.
+Do not rewrite historical cached messages or source reads to inflate token savings.
+
+For isolated live measurements, run `npm run benchmark:proxy -- --proxy-url
+http://127.0.0.1:4474 --rounds 3 --output /tmp/opencode-headroom-benchmark.json`
+against a dedicated Headroom instance with isolated stores. The benchmark uses the
+single configured OpenCode OpenAI connection, synthetic transcripts and identical
+model/reasoning/request tiers on both arms. It alternates direct/proxy order and
+reports response correctness, first-token/total latency, provider token counts and
+cache receipts. It refuses ambiguous accounts and never writes credentials or
+prompt contents. Small samples and API-equivalent counters do not establish general
+coding speed, commercial quality or subscription-quota savings.
 
 ## Retrieve Tool
 

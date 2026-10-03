@@ -1,4 +1,5 @@
 import { defineConfig } from "tsup";
+import { buildV2Entry } from "./scripts/build-v2-entry.mjs";
 
 // Self-contained build of the transport-plugin entry for distribution inside
 // the Python wheel (headroom/providers/opencode/_dist/). The regular build
@@ -10,6 +11,7 @@ export default defineConfig({
   // alongside the entry so spawned Node children route their traffic too (#2850).
   entry: {
     "entry.opencode": "src/entry.opencode.ts",
+    "entry.opencode.v2": "src/entry.opencode.v2.ts",
     "hook-shim/handler": "src/hook-shim.ts",
   },
   outDir: "dist-standalone",
@@ -19,4 +21,5 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   noExternal: [/.*/],
+  onSuccess: () => buildV2Entry("dist-standalone"),
 });
