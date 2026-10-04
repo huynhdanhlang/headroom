@@ -200,3 +200,23 @@ plugin reload, followed by actual traffic/native-tool verification. No push,
 model/Fast change, video-app restart or creator-project write authorized.
 Integration/activation is now in progress; no live acceptance claimed until those
 checks finish. Preserve the exact prior image/config/state/cache for rollback.
+
+### Installed-host acceptance checkpoint
+
+Commit `2467011c` was integrated by fast-forward and its clean pinned release
+image passed exact overlay-hash/offline-model checks. Both Headroom services were
+activated healthy; prior image, stopped state/cache/config, anonymous volumes and
+plugin/config preimages are preserved under the installation's `backups/`.
+Current Responses traffic carried session cwd and native ownership, and all five
+memory tools were discovered/executed in the real Code Mode host without restarting
+OpenCode. OpenCode config/model/Fast settings stayed byte-identical.
+
+The actual fresh-session fixture found a remaining consumer defect: list-shaped
+Responses input was not projected into the recall query, so native saved feedback
+was searchable but absent from automatic reminders. A real ASGI regression failed
+on the missing outgoing reminder; native HTTP/WS now use a read-only text query
+projection and only append background to the latest user item. The WS regression
+also caught its missing array injection. Signed prefix, current instructions,
+priority request and irrelevant-query omission remain covered. The affected run
+passes 95 checks; the new source must be clean-built/re-activated and the actual
+host fixture resumed before claiming useful live acceptance.

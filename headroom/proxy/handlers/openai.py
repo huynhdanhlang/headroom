@@ -6277,7 +6277,15 @@ class OpenAIHandlerMixin:
                                 memory_user_id,
                                 optimized_messages,
                                 request_context=memory_request_ctx,
-                                query=MemoryQuery.from_messages(optimized_messages),
+                                # Native arrays stay byte-for-byte on the wire.
+                                # Project only their text into a read-only query;
+                                # the removed Python compression converter is not
+                                # responsible for the memory lookup consumer.
+                                query=MemoryQuery.from_messages(
+                                    _responses_input_to_waste_messages(None, input_data)
+                                    if request.headers.get("x-headroom-memory-tools") == "client" and isinstance(input_data, list)
+                                    else optimized_messages
+                                ),
                             ),
                             timeout=RESPONSES_CONTEXT_SEARCH_TIMEOUT_SECONDS,
                         )
@@ -8143,7 +8151,11 @@ class OpenAIHandlerMixin:
                                         memory_user_id,
                                         ws_msgs,
                                         request_context=memory_request_ctx,
-                                        query=MemoryQuery.from_messages(ws_msgs),
+                                        query=MemoryQuery.from_messages(
+                                            _responses_input_to_waste_messages(None, ws_input)
+                                            if websocket.headers.get("x-headroom-memory-tools") == "client" and isinstance(ws_input, list)
+                                            else ws_msgs
+                                        ),
                                     ),
                                     timeout=RESPONSES_CONTEXT_SEARCH_TIMEOUT_SECONDS,
                                 )
@@ -8184,6 +8196,14 @@ class OpenAIHandlerMixin:
                                     bytes_injected=len(memory_context),
                                     query=None,
                                     tags=ws_tags,
+                                )
+                            elif websocket.headers.get("x-headroom-memory-tools") == "client" and isinstance(ws_input_for_inject, list):
+                                from headroom.proxy.helpers import (
+                                    append_text_to_latest_user_input_item,
+                                )
+
+                                ws_response_body["input"], _ = append_text_to_latest_user_input_item(
+                                    ws_input_for_inject, memory_context
                                 )
                             else:
                                 # List-shaped WS input is owned by the

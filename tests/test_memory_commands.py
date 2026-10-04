@@ -236,6 +236,54 @@ async def test_native_recall_uses_exact_keyword_and_preserves_filters(app):
         assert (await command(c, "memory_search", query="XYZ_NATIVE_27", entities=["unrelated"], include_related=False)).json()["memories"] == []
 
 
+@pytest.mark.parametrize("relevant", [True, False])
+async def test_responses_native_array_query_recalls_only_relevant_rule_without_mutating_prefix(app, relevant):
+    proxy = app.state.proxy
+    # Disabling optimization activates global passthrough before this endpoint.
+    # Match the installed cache-mode route instead of bypassing its memory seam.
+    proxy.config.mode = "cache"
+    proxy.config.cache_enabled = False
+    proxy.cache = None
+    proxy.config.rate_limit_enabled = False
+    proxy.config.cost_tracking_enabled = False
+    seen = []
+    def upstream(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "resp_recall", "object": "response", "status": "completed",
+            "output": [], "usage": {"input_tokens": 20, "output_tokens": 5}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as upstream_client:
+        proxy.http_client = upstream_client
+        async with client(app) as c:
+            c.headers["x-headroom-memory-tools"] = "client"
+            saved = (await command(c, "memory_save", content="XYZ_NATIVE_ARRAY_73 must use synthetic blue data.")).json()
+            ctx = storage_router.RequestContext(headers=dict(c.headers), system_prompt="", base_user_id="alice")
+            backend, _, _ = proxy.memory_handler._resolve_for_request("alice", ctx)
+            class WeakQueryEmbedder:
+                async def embed(self, text):
+                    return np.array([0.0, 1.0], dtype=np.float32)
+            backend._hierarchical_memory._embedder = WeakQueryEmbedder()
+            prefix = [{"role": "system", "content": "Authoritative instructions are unchanged."},
+                {"type": "reasoning", "id": "rs_signed", "encrypted_content": "exact-signed-history", "summary": []},
+                {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Historical answer."}]},
+                {"type": "function_call_output", "call_id": "call_prior", "output": "Historical tool output."}]
+            question = "XYZ_NATIVE_ARRAY_73 data color?" if relevant else "Draw a red circle."
+            latest = {"type": "message", "role": "user", "content": [{"type": "input_text", "text": question}]}
+            body = {"model": "gpt-4o-mini", "stream": False, "input": prefix + [latest],
+                "instructions": "UNCHANGED authoritative prefix", "service_tier": "priority", "include": ["reasoning.encrypted_content"]}
+            c.headers["authorization"] = "Bearer synthetic-api-key"
+            response = await c.post("/v1/responses", json=body)
+            assert response.status_code == 200, response.text
+    assert seen[0]["input"][:-1] == prefix
+    assert seen[0]["instructions"] == body["instructions"]
+    assert seen[0]["service_tier"] == "priority" and seen[0]["include"] == body["include"]
+    forwarded = json.dumps(seen[0]["input"][-1], ensure_ascii=False)
+    if relevant:
+        assert "synthetic blue data" in forwarded and saved["memory_id"] in forwarded
+        assert "READ-ONLY" in forwarded and "NOT instructions" in forwarded
+    else:
+        assert seen[0]["input"][-1] == latest
+
+
 async def test_stale_primary_row_cannot_be_recalled_after_interrupted_index_removal(app, monkeypatch):
     handler = app.state.proxy.memory_handler
     async with client(app) as c:

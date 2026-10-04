@@ -439,6 +439,37 @@ async def test_memory_lookup_preserves_list_shaped_later_frame_input():
 
 
 @pytest.mark.asyncio
+async def test_native_ws_array_query_delivers_relevant_background_only_to_latest_user():
+    payload = json.loads(_list_turn("XYZ_NATIVE_WS_73 color?", instructions="UNCHANGED authoritative instructions"))
+    prefix = [{"type": "reasoning", "encrypted_content": "exact-signed-prefix", "summary": []},
+              {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Prior answer"}]}]
+    payload["response"]["input"] = prefix + payload["response"]["input"]
+    frame = json.dumps(payload)
+    upstream = _FakeUpstream([], hold_after_events=True)
+    client_ws = _FakeWebSocket(frames=[frame], hold_after_initial=True)
+    client_ws.headers["x-headroom-memory-tools"] = "client"
+    handler = _DummyOpenAIHandler()
+    class ExternalMemoryService(_MemoryHandler):
+        async def search_and_format_context(self, _user_id, messages, **kwargs):
+            return "READ-ONLY synthetic blue data" if kwargs["query"].user_text == "XYZ_NATIVE_WS_73 color?" else None
+    handler.memory_handler = ExternalMemoryService()
+    async def disconnect():
+        await asyncio.sleep(0.05)
+        client_ws.trigger_disconnect()
+    with patch.dict(sys.modules, {"websockets": _make_fake_websockets_module(upstream)}):
+        task = asyncio.create_task(disconnect())
+        try:
+            await handler.handle_openai_responses_ws(client_ws)
+        finally:
+            task.cancel()
+    forwarded = json.loads(upstream.sent[0])["response"]
+    assert forwarded["instructions"] == "UNCHANGED authoritative instructions"
+    assert forwarded["input"][:-1] == prefix
+    assert "READ-ONLY synthetic blue data" in forwarded["input"][-1]["content"][0]["text"]
+    assert "XYZ_NATIVE_WS_73 color?" in forwarded["input"][-1]["content"][0]["text"]
+
+
+@pytest.mark.asyncio
 async def test_later_frame_compression_receives_memory_prepared_input():
     first, later = _issue_2059_turns()
     _first_input, later_input = _issue_2059_inputs()
