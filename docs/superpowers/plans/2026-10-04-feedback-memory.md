@@ -251,3 +251,83 @@ There is no required activation work remaining. Limits remain the three named
 unchanged baseline router fixtures, 54 external-fixture skips and unqualified
 arbitrary cross-language paraphrases; successful tested flows are not proof of
 universal semantic quality, model speedup, quota savings or video design acceptance.
+
+## Authorized follow-up — remaining failures and existing-session evidence
+
+Owner requested “fix luôn hết” and use a currently running session as evidence.
+Continue inline in the existing worktree/ledger; do not create another roadmap.
+Observe that session read-only, without injecting prompts, changing its model,
+interrupting its work or writing its creator project. Keep the qualified native
+base/model and existing source/build/backup authority boundaries.
+
+### Task 9: Make router-context regressions exercise their actual consumer offline
+
+**Owner/files:** `tests/test_ai_motion_router_scope.py`; the unchanged runtime
+consumer is `OpenAIHandlerMixin._compress_openai_responses_live_text_units_with_router`.
+**Interface:** `openai_provider.get_token_counter(model)` returns a counter with
+`count_text(text) -> int`; these tests own ContextVar/router-worker isolation,
+not tokenizer downloads. Reuse their existing `Counter` for this external seam.
+
+- [x] Reproduce the three named failures on current source; DEBUG evidence shows
+  an offline tiktoken vocabulary fetch before any router entry.
+- [x] Inject the existing deterministic counter into just the two affected test
+  fixtures. Keep assertions that workers are genuinely entered and inherit
+  context, stale options do not leak, and caller state is restored.
+- [x] Run `run.py tests/test_ai_motion_router_scope.py -q`; verified 9 passing,
+  no skips and no change to production tokenizer/compression policy.
+
+### Task 10: Execute all core lifecycle tests on the installed production adapters
+
+**Owner/files:** `tests/test_memory/test_core_operations.py`; existing
+`MemoryConfig`, factory, SQLite/vector/FTS/cache and qualified ONNX are consumers.
+**Interface:** fixture constructs `HierarchicalMemory.create(MemoryConfig(
+db_path=temp_db_path, vector_backend=VectorBackend.SQLITE_VEC,
+embedder_backend=EmbedderBackend.ONNX))`. Tests must not skip because unrelated
+hnswlib/torch/model downloads are absent.
+
+- [x] Reproduce 54 skips; current source already repairs the FTS core seam.
+- [x] Remove the obsolete file-wide HNSW condition/network-skip decorator; use
+  the installed SQLite/ONNX fixture and a read-only copy of the qualified cache.
+- [x] Run all 54 cases offline without production-state mounts. Diagnose each
+  exposed product failure with RED→GREEN, not weaker expectations or new skips.
+- [x] Run affected memory/router/Responses/protection/accounting slices once
+  after any runtime edits. Keep model/dependency pins unchanged.
+
+### Task 11: Verify real-session behavior and close only evidenced gaps
+
+- [x] Record bounded current model/usage/tool outcomes and actual request scope,
+  native ownership, read/cache protection and errors from the existing active
+  session, without copying its private prompts into the handoff.
+- [x] If recall quality exposes a reproducible defect, add a synthetic regression
+  at the existing retrieval owner. Do not promise universal semantic accuracy or
+  silently swap the qualified embedding model.
+- [ ] Review/commit/integrate the bounded fixes. If runtime changes, clean-build,
+  back up and activate under the existing authorization, then verify resumed
+  traffic. If only fixtures change, do not restart a healthy runtime needlessly.
+- [ ] Update this checkpoint and preserve exact evidence/limits in the existing
+  backup; distinguish test setup, product bugs and unavailable host diagnostics.
+
+### Follow-up source evidence (before activation)
+
+- `followup-final-verification.log`: **568 passed / zero skips**, 104.88s,
+  including all 54 real SQLite/ONNX core cases and all nine router cases.
+- Real core cases exposed legacy `supersede` missing-ID message incompatibility;
+  repaired only with both guards absent. Three partial/full-guard regressions
+  preserve uniform conflict and do not expose foreign-memory existence.
+- `followup-utc-red.log`: two real deprecated-clock failures; UTC-window and
+  persisted-access-count regressions pass without changing naive-UTC schema.
+- One read-only review found the global call-hook skip loophole. Actual cold-cache
+  `check_cold_core.py` replay first returned success/skip (RED); after qualified
+  embedder loading during setup it returns an explicit setup failure with zero
+  skips (GREEN). Fixture closes its resources even on setup failure.
+- `followup-ruff-source-final.log`: pinned Ruff 0.16.8 runtime-source check passes.
+  Three residual warnings are a pinned upstream Starlette test-client warning
+  and old clock defaults in a test's reloaded legacy module, not changed runtime.
+- `followup-existing-session-evidence.json`: 21 observed native-client creator
+  scope requests and eight active scoped memory rows, completed actual loopback
+  Responses, unchanged selected model; observed service tier is `default`.
+  No prompts, writes, model changes or interruption were sent to that session.
+  This proves scope/storage/routing, not arbitrary bilingual recall quality.
+- Experimental OpenCode stats returned 500 and broad CLI message output truncated;
+  use bounded projected traffic/counters instead, not unrelated host repairs.
+  Keep universal cross-language semantic quality explicitly unqualified.

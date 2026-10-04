@@ -147,6 +147,8 @@ def test_responses_unit_and_batch_workers_inherit_context(monkeypatch, small_bat
         )
     )
     proxy = app.state.proxy
+    # This suite tests worker/context propagation, not vocabulary downloads.
+    monkeypatch.setattr(proxy.openai_provider, "get_token_counter", lambda _model: Counter())
     router = find_content_router(proxy.openai_pipeline)
     assert router is not None
     router.config.lossless = True
@@ -200,6 +202,7 @@ def test_responses_entry_does_not_inherit_previous_apply_options(monkeypatch):
         )
     )
     proxy = app.state.proxy
+    monkeypatch.setattr(proxy.openai_provider, "get_token_counter", lambda _model: Counter())
     router = find_content_router(proxy.openai_pipeline)
     assert router is not None
     router.config.lossless = True

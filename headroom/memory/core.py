@@ -590,6 +590,10 @@ class HierarchicalMemory:
         """
         # Get old memory
         old_memory = await self._store.get(old_memory_id)
+        if old_memory is None and expected_user_id is None and expected_content_hash is None:
+            # Preserve the public legacy API's missing-ID contract. Native
+            # guarded operations still hide owner/existence behind one conflict.
+            raise ValueError(f"Memory {old_memory_id} not found")
         if (old_memory is None or not old_memory.is_current or old_memory.superseded_by
                 or old_memory.metadata.get("forgotten_at")
                 or (expected_user_id is not None and old_memory.user_id != expected_user_id)

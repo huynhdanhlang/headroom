@@ -6,7 +6,7 @@ import sqlite3
 import pytest
 
 from headroom.memory.adapters.sqlite import SQLiteMemoryStore
-from headroom.memory.models import Memory
+from headroom.memory.models import Memory, MemoryConflictError
 from headroom.memory.ports import TextFilter
 
 
@@ -240,6 +240,16 @@ async def test_local_list_uses_primary_recency_not_an_empty_embedding_query(syst
     await system.add("Foreign rule", "bob", auto_embed=False)
     rows = await backend.list_memories("alice", limit=10)
     assert [m.id for m in rows] == [new.id]
+
+
+@pytest.mark.parametrize("guards", [
+    {"expected_user_id": "alice"},
+    {"expected_content_hash": "sha256:missing"},
+    {"expected_user_id": "alice", "expected_content_hash": "sha256:missing"},
+])
+async def test_missing_guarded_supersession_is_uniform_conflict_not_legacy_not_found(system, guards):
+    with pytest.raises(MemoryConflictError, match="Memory owner/version conflict"):
+        await system.supersede("missing-private-id", "replacement", auto_embed=False, **guards)
 
 
 @pytest.mark.parametrize("changed", [

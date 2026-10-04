@@ -387,7 +387,7 @@ class SQLiteMemoryStore:
         if not unique_ids:
             return 0
 
-        timestamp = accessed_at or datetime.utcnow()
+        timestamp = accessed_at or datetime.now(timezone.utc).replace(tzinfo=None)
         placeholders = ", ".join("?" for _ in unique_ids)
         with self._get_conn() as conn:
             cursor = conn.execute(

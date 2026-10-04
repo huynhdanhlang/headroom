@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -83,8 +83,8 @@ class Memory:
     turn_id: str | None = None
 
     # Temporal
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    valid_from: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    valid_from: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     valid_until: datetime | None = None  # None = current/active
 
     # Classification

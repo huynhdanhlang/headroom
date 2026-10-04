@@ -35,8 +35,16 @@ native array-input recall gaps in HTTP/WS; read-only query projection and latest
 user-tail injection fix them while keeping signed/cache prefixes unchanged.
 The final runtime source is `c36d0f1a`, clean-built on the same pinned base;
 both Headroom services are healthy with actual scope/ownership traffic verified.
-Three router fixture
-checks fail identically on the untouched baseline and remain a verification gap.
+The subsequent authorized follow-up closes the three baseline router-fixture
+failures by injecting the existing deterministic token counter into their
+external tokenizer seam; real context/fan-out assertions stay intact. All 54
+previously HNSW-gated core cases now run against the installed SQLite-vector and
+qualified offline ONNX adapters. Missing model assets fail fixture setup, never
+silently skip. The exposed legacy missing-ID supersession message is restored
+only for unguarded calls; partial guards still return uniform conflicts.
+Default/access timestamps retain naive UTC without deprecated `utcnow`.
+Final affected suites: 568 passed, zero skips; pinned runtime-source Ruff passed.
+This follow-up's release/live acceptance is recorded separately in the Plan.
 Exact per-slice evidence, review, source/bundle hashes and proposed activation
 boundary are recorded in the approved `2026-10-04-feedback-memory` Plan and its
 private worktree ledger. Those integration/build/activation actions were separately

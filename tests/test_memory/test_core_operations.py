@@ -10,8 +10,8 @@ Tests cover:
 - Deletion operations
 - Convenience methods (remember, recall, get_user_memories, get_session_memories)
 
-Note: These are integration tests that may hit external embedding APIs.
-Tests are marked to skip on network timeouts (flaky CI).
+These integration tests use the installed SQLite vector/FTS and qualified local
+ONNX embedder. Missing offline model assets are setup failures, not silent skips.
 """
 
 # CRITICAL: Must set TOKENIZERS_PARALLELISM before any imports
@@ -19,7 +19,6 @@ import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-import functools
 import gc
 import tempfile
 import time
@@ -27,37 +26,10 @@ from pathlib import Path
 
 import pytest
 
-from headroom.memory.config import MemoryConfig
+from headroom.memory.config import EmbedderBackend, MemoryConfig, VectorBackend
 from headroom.memory.core import HierarchicalMemory
 from headroom.memory.models import Memory, ScopeLevel
 from headroom.memory.ports import MemoryFilter
-from tests._skip_helpers import external_model_skip_reason
-
-# Check if hnswlib is available (HierarchicalMemory requires it)
-try:
-    from headroom.memory.adapters.hnsw import _check_hnswlib_available
-
-    HNSW_AVAILABLE = _check_hnswlib_available()
-except ImportError:
-    HNSW_AVAILABLE = False
-
-pytestmark = pytest.mark.skipif(not HNSW_AVAILABLE, reason="hnswlib not available")
-
-
-def network_timeout_handler(func):
-    """Decorator to skip tests on transient/offline model dependency failures."""
-
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except Exception as exc:
-            reason = external_model_skip_reason(exc)
-            if reason is not None:
-                pytest.skip(reason)
-            raise
-
-    return wrapper
 
 
 # =============================================================================
@@ -88,11 +60,17 @@ def temp_db_path():
 @pytest.fixture
 async def memory_system(temp_db_path):
     """Create a HierarchicalMemory instance for testing."""
-    config = MemoryConfig(db_path=str(temp_db_path))
+    config = MemoryConfig(db_path=str(temp_db_path), vector_backend=VectorBackend.SQLITE_VEC,
+                          embedder_backend=EmbedderBackend.ONNX)
     system = await HierarchicalMemory.create(config)
-    yield system
-    # Properly close to release httpx clients
-    await system.close()
+    try:
+        # Load the real qualified assets during setup. The global runtest-call
+        # hook skips external-model errors; missing local assets must instead
+        # fail this suite's setup, never turn lifecycle coverage into skips.
+        await system.embedder.embed("core lifecycle fixture readiness")
+        yield system
+    finally:
+        await system.close()
 
 
 # =============================================================================
@@ -104,7 +82,6 @@ class TestAddBatch:
     """Tests for HierarchicalMemory.add_batch()."""
 
     @pytest.mark.asyncio
-    @network_timeout_handler
     async def test_add_batch_basic(self, memory_system):
         """Test basic batch addition."""
         memories_data = [
@@ -502,7 +479,6 @@ class TestSupersede:
         assert new.id in found_ids
 
     @pytest.mark.asyncio
-    @network_timeout_handler
     async def test_superseded_memory_does_not_resurface_in_search(self, memory_system):
         """The superseded (old) version must not keep coming back from search.
 
@@ -530,7 +506,6 @@ class TestSupersede:
         assert new.id in [r.memory.id for r in new_results]
 
     @pytest.mark.asyncio
-    @network_timeout_handler
     async def test_superseded_index_removal_boundary(self, memory_system):
         """Boundary of the supersede index-removal (#2143).
 
