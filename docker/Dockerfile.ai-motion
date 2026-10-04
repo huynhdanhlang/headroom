@@ -19,6 +19,7 @@ COPY headroom/memory/adapters/sqlite.py /usr/local/lib/python3.13/site-packages/
 COPY headroom/memory/backends/local.py /usr/local/lib/python3.13/site-packages/headroom/memory/backends/local.py
 COPY headroom/memory/traffic_learner.py /usr/local/lib/python3.13/site-packages/headroom/memory/traffic_learner.py
 COPY headroom/memory/storage_router.py /usr/local/lib/python3.13/site-packages/headroom/memory/storage_router.py
+COPY headroom/memory/proxy_mcp.py /usr/local/lib/python3.13/site-packages/headroom/memory/proxy_mcp.py
 COPY headroom/proxy/handlers/streaming.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/streaming.py
 COPY headroom/proxy/memory_tool_stream.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_tool_stream.py
 COPY headroom/proxy/savings_tracker.py /usr/local/lib/python3.13/site-packages/headroom/proxy/savings_tracker.py

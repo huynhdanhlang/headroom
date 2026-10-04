@@ -7,6 +7,28 @@ The native/dependency base is the upstream AMD64 image from matching CI run
 `ghcr.io/headroomlabs-ai/headroom:code-1cf4966@sha256:927b633cb93324aad209219f216df9d66e9b28816050a97362c5e196fe6a7261`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
 
+## Codex client-owned proxy memory (2026-10-05)
+
+`headroom.memory.proxy_mcp` exposes search/list/save/update/delete over the running
+proxy's existing local `/v1/memory/tools` command facade. It owns transport only:
+no second SQLite store, embedder initialization, provider call or model change.
+Exact IDs/hashes guard correction and retained forget; current instructions and
+permissions take precedence over recalled background. Tool arguments cannot
+select user/project identity. HTTP requests and results are bounded, and failed
+or interrupted writes are never reported as confirmed remembered.
+
+For this Docker installation, `scripts/codex_memory_mcp.py` launches the clean
+release image by immutable image ID using host stdlib and inherited session cwd.
+No project/secret mounts, Docker socket mount or explicit global MCP cwd are
+needed. MCP roots, when supported, are consulted on each call so session moves
+follow the current project; ambiguous/failed roots fail closed. Hosts without
+roots retain their startup project until a fresh MCP session is created.
+Register the launcher as `mcp_servers.headroom_memory` in Codex's config with
+`command = "/usr/bin/python3"` and args `[absolute_launcher_path, "--image",
+"sha256:<installed-clean-image-id>"]`; the local proxy defaults to port 4444.
+Existing local-DB `headroom.memory.mcp_server` compatibility stays unchanged.
+The proxy and CCR do not require a restart for this client-only adapter.
+
 ## Synchronization through 1cf49661 (2026-10-04)
 
 ### Qualified feedback-memory source — activation separately verified

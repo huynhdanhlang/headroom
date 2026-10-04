@@ -12,6 +12,7 @@ scripts/
 !scripts/
 scripts/*
 !scripts/build_ai_motion.py
+!scripts/codex_memory_mcp.py
 !scripts/benchmark_ai_motion.py
 !scripts/install.sh
 !scripts/install.ps1
