@@ -1,11 +1,25 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `2bc94194671548c5def53809f736340285e20e76` (0.39.1 plus latest upstream main fixes).
+Integrated upstream source and native/dependency anchor: `1cf496612e781ef8d67ff87ee4f78037492f0bc7` (0.39.1 plus latest upstream main fixes).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37100184479's `digests-code-amd64` artifact (the per-platform smoke test passed):
-`ghcr.io/headroomlabs-ai/headroom:code-2bc9419@sha256:31293e207d978289a3fff218a98afd69e0f201a348f71510a0f90700f90c6437`.
+37154398685's `digests-code-amd64` artifact (the per-platform smoke test passed):
+`ghcr.io/headroomlabs-ai/headroom:code-1cf4966@sha256:927b633cb93324aad209219f216df9d66e9b28816050a97362c5e196fe6a7261`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 1cf49661 (2026-10-04)
+
+Integrated five commits: streamed injected memory-tool execution, context injection
+past trailing system messages, persisted escaped pattern-ID recognition, Hermes
+documentation and npm maintenance. Upstream now supplies the equivalent learner
+marker fix, so its overlay is removed without weakening managed-block protection.
+Upstream continuation accounting undercounted Anthropic prompt tokens and hid
+continuation input/cache usage from clients. A failing streamed two-round regression
+reproduced this; the fork totals uncached plus cache input across rounds and emits
+cumulative client usage without modifying ordinary single-round streams.
+The twelve remaining overlays retain OpenCode V2, cache-mode Responses prefix/read
+protection, request isolation, bounded deadlines and accounting. Live model,
+context, persistent tokenizer cache and worker/security configuration remain unchanged.
 
 ## Synchronization through 2bc94194 (2026-10-03)
 

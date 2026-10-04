@@ -116,10 +116,11 @@ def _build_section(recommendations: list[Recommendation]) -> str:
 
 # Matches the "*~N tokens/session saved*" annotation emitted by _build_section.
 _TOKENS_ANNOTATION_PATTERN = re.compile(r"\*~([\d,]+) tokens/session saved\*\n?")
-# Managed-block sanitization escapes comment endings when writing to disk.
-# Recognize that inert form as metadata without unescaping transcript content.
+# New recommendations contain raw annotations; saved blocks contain the
+# escaped delimiters emitted by sanitize_block_text. Recognize both without
+# unescaping transcript-derived content or weakening managed-block boundaries.
 _PATTERN_ID_PATTERN = re.compile(
-    r"(?:<!--|&lt;!--)\s*headroom:pattern-id:([^\s>]+)\s*--(?:>|&gt;)\s*$"
+    r"(?:<!--|&lt;!--)\s*headroom:pattern-id:([^\s>]+)\s*(?:-->|--&gt;)\s*$"
 )
 
 
