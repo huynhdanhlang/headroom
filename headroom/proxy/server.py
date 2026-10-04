@@ -5934,6 +5934,9 @@ def create_app(config: ProxyConfig | None = None) -> FastAPI:
 
     _install_gateway_contract(app, config, route_dependencies=_compress_dependencies)
 
+    from headroom.proxy.memory_commands import register_memory_commands
+
+    register_memory_commands(app, proxy)
     register_provider_routes(app, proxy)
     # Register last so this raw ASGI middleware is outermost and covers the
     # complete response body, including responses produced by other middleware.

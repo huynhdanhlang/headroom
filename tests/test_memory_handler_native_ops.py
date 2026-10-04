@@ -63,6 +63,28 @@ class FakeBackend:
         return len(memory_ids)
 
 
+@pytest.mark.parametrize("inactive", [False, True])
+async def test_save_returns_committed_version_and_truthful_replay(handler, monkeypatch, inactive):
+    from headroom.memory.models import Memory
+    from datetime import datetime
+    backend = FakeBackend()
+    async def committed_save(**kwargs):
+        backend.saved.append(kwargs)
+        return Memory(id="evidence-1", content=kwargs["content"], user_id="u1", replayed=True,
+                      valid_until=datetime(2026, 10, 4) if inactive else None,
+                      metadata={"forgotten_at": "2026-10-04"} if inactive else {})
+    backend.save_memory = committed_save
+    monkeypatch.setattr(handler, "_resolve_for_request", lambda *args: (backend, None, "u1"))
+    result = json.loads(await handler._execute_save({"content": "Đừng dùng dữ liệu giả.",
+        "_evidence_key": "session:message:1", "_source_text": "Đừng dùng dữ liệu giả."}, "u1"))
+    assert result["memory_id"] == "evidence-1"
+    assert result["content_hash"].startswith("sha256:")
+    assert result["replayed"] is True
+    assert result["status"] == ("forgotten" if inactive else "saved")
+    assert backend.saved[0]["evidence_key"] == "session:message:1"
+    assert backend.saved[0]["metadata"]["source_text"] == "Đừng dùng dữ liệu giả."
+
+
 def make_result(
     memory_id: str,
     content: str,
@@ -600,6 +622,7 @@ async def test_execute_search_update_delete_and_handler_status(
     assert search_payload["memories"][0] == {
         "id": "m1",
         "content": "pizza",
+        "content_hash": "sha256:9ed1515819dec61fd361d5fdabb57f41ecce1a5fe1fe263b98c0d6943b9b232e",
         "score": 0.912,
         "entities": ["food", "italy"],
     }
@@ -764,7 +787,11 @@ async def test_execute_save_handles_search_failure(handler: MemoryHandler) -> No
 
     backend.raise_on = "search"
     saved = json.loads(await handler._execute_save({"content": "Useful fact"}, "u1"))
-    assert saved == {"status": "saved", "memory_id": "mem-1", "content": "Useful fact"}
+    assert saved == {
+        "status": "saved", "memory_id": "mem-1", "content": "Useful fact",
+        "content_hash": "sha256:43194c7cbaeb67274996a30cc1a17a0cda0a55c965e549828e8f3b45f50b5c5f",
+        "replayed": False, "scope": None,
+    }
 
 
 @pytest.mark.asyncio

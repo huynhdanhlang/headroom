@@ -26,6 +26,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -467,6 +468,7 @@ class TrafficLearner:
         dedup_window: int = 100,
         min_evidence: int = 5,
         max_pending_patterns: int = 2048,
+        write_native_files: bool = True,
     ) -> None:
         """Initialize the traffic learner.
 
@@ -486,6 +488,8 @@ class TrafficLearner:
         self._max_history = max_history
         self._min_evidence = min_evidence
         self._max_pending_patterns = max_pending_patterns
+        self._write_native_files = write_native_files
+        self._seen_preferences: OrderedDict[str, None] = OrderedDict()
 
         # Recent tool call history for error→recovery matching
         self._tool_history: list[dict[str, Any]] = []
@@ -625,6 +629,8 @@ class TrafficLearner:
 
         Un-anchored patterns (no absolute path in content) are dropped in v1.
         """
+        if not self._write_native_files:
+            return
         try:
             from headroom.learn.registry import auto_detect_plugins, get_plugin
         except Exception as e:
@@ -818,6 +824,8 @@ class TrafficLearner:
         self,
         messages: list[dict[str, Any]],
         agent_type: str = "unknown",
+        *,
+        evidence_id: str | None = None,
     ) -> None:
         """Process message content for preference/architecture patterns.
 
@@ -847,6 +855,14 @@ class TrafficLearner:
                     continue
                 patterns = self._extract_preferences(canonical)
                 for pattern in patterns:
+                    identity = evidence_id or hashlib.sha256(canonical.encode()).hexdigest()
+                    key = f"{pattern.content_hash}:{identity}"
+                    if key in self._seen_preferences:
+                        continue
+                    self._seen_preferences[key] = None
+                    if len(self._seen_preferences) > self._max_pending_patterns:
+                        self._seen_preferences.popitem(last=False)
+                    pattern.metadata["evidence_id"] = identity
                     await self._accumulate(pattern)
 
     def get_stats(self) -> dict[str, Any]:
@@ -1051,12 +1067,7 @@ class TrafficLearner:
     # boundary rules (sentence terminator / end-of-input / max-length)
     # without nesting more pattern syntax.
 
-    # Each entry is a sequence of lowercase tokens that must appear
-    # in order with whitespace / single-comma separation. ``max_chars``
-    # caps how much content we'll capture after the last trigger
-    # token. The "instead" trigger gets a tighter cap because in
-    # practice its tail tends to be shorter and we want to be less
-    # forgiving of long rambles after it.
+    # Clause-leading signals; capture always retains the complete wording.
     _PREFERENCE_TRIGGERS: ClassVar[tuple[tuple[tuple[str, ...], int], ...]] = (
         (("don't",), 98),
         (("dont",), 98),
@@ -1068,14 +1079,21 @@ class TrafficLearner:
         (("no", "try"), 98),
         (("no", "do"), 98),
         (("instead",), 78),
+        (("đừng",), 16384),
+        (("không", "được"), 16384),
+        (("không", "dùng"), 16384),
+        (("không", "chỉ"), 16384),
+        (("tránh",), 16384),
+        (("luôn",), 16384),
+        (("always",), 16384),
+        (("nhớ", "quy", "tắc"), 16384),
+        (("ghi", "nhớ"), 16384),
+        (("remember", "this"), 16384),
+        (("remember",), 16384),
+        (("from", "now", "on"), 16384),
+        (("từ", "nay"), 16384),
+        (("feedback", "này"), 16384),
     )
-
-    # Characters that mark the end of the captured preference.
-    _SENTENCE_TERMINATORS: ClassVar[frozenset[str]] = frozenset(".!?\n")
-
-    # Characters allowed between the trigger and the start of the
-    # capture (e.g. the comma in "No, use httpx").
-    _PRE_CAPTURE_PUNCT: ClassVar[frozenset[str]] = frozenset(",;:")
 
     # Characters stripped from individual tokens before trigger
     # matching ("don't," → "don't"; "stop." → "stop"). Whitespace is
@@ -1094,28 +1112,32 @@ class TrafficLearner:
           instead of Grep") but the old correction regexes matched
           them. We strip those blocks first so reminders never feed
           the learner.
-        * The capture used to be a fixed-length window which produced
-          mid-sentence truncations. The token-based scanner below
-          ends each capture at a sentence terminator OR at
-          end-of-input, and rejects anything that would require
-          truncation past ``max_chars``.
+        * Bounded clause scanning retains the full authored wording. An
+          explicit retention directive covers its following correction
+          clauses in the same paragraph, not quotes or a separate paragraph.
         """
 
-        cleaned = _canonicalize_user_text(self._strip_system_reminders(user_text))[:500]
+        cleaned = _canonicalize_user_text(self._strip_system_reminders(user_text))
+        if len(cleaned) > 16384:
+            return []
         if not _is_learnable_user_text(cleaned):
             return []
-        correction = self._find_correction(cleaned)
-        if correction is None:
-            return []
-
-        return [
-            ExtractedPattern(
-                category=PatternCategory.PREFERENCE,
-                content=f"User preference: {correction}",
-                importance=0.75,
-                metadata={"type": "correction", "source_text": cleaned[:200]},
-            )
-        ]
+        patterns = []
+        for paragraph in re.split(r"\n\s*\n", cleaned):
+            retained = False
+            for correction in self._find_corrections(paragraph):
+                folded = unicodedata.normalize("NFC", correction).casefold()
+                retained = retained or folded.startswith((
+                    "remember this", "remember:", "ghi nhớ", "nhớ quy tắc", "from now on",
+                    "từ nay", "áp dụng toàn hệ thống", "applies system-wide",
+                ))
+                patterns.append(ExtractedPattern(
+                    category=PatternCategory.PREFERENCE,
+                    content=f"User preference: {correction}", importance=0.75,
+                    metadata={"type": "correction", "source_text": correction,
+                              "explicit_retention": retained, "authority": "background"},
+                ))
+        return patterns
 
     @classmethod
     def _find_correction(cls, text: str) -> str | None:
@@ -1126,20 +1148,70 @@ class TrafficLearner:
         order; the first satisfied trigger wins.
         """
 
-        tokens = cls._tokenize(text)
-        if not tokens:
-            return None
+        corrections = cls._find_corrections(text)
+        return corrections[0] if corrections else None
 
-        for trigger_idx in range(len(tokens)):
-            for sequence, max_chars in cls._PREFERENCE_TRIGGERS:
-                if not cls._matches_sequence(tokens, trigger_idx, sequence):
+    @classmethod
+    def _find_corrections(cls, text: str) -> list[str]:
+        """Keep complete authored clauses, including negation and replacement.
+
+        Only clause-leading directives qualify. Examples, code fences and quoted
+        blocks are not user corrections. No fixed tail capture may invert meaning.
+        """
+        if len(text) > 16384:
+            return []
+        corrections: list[str] = []
+        fenced = False
+        buffers: list[str] = []
+        chunks: list[str] = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("```", "~~~")):
+                if buffers:
+                    chunks.append("\n".join(buffers))
+                    buffers = []
+                fenced = not fenced
+                continue
+            if not stripped or fenced or stripped.startswith((">", '"', "“", "'", "Example:", "Ví dụ:")):
+                if buffers:
+                    chunks.append("\n".join(buffers))
+                    buffers = []
+                continue
+            buffers.append(line)
+        if buffers:
+            chunks.append("\n".join(buffers))
+        for chunk in chunks:
+            # Mask quoted spans for boundary/trigger detection only. Retained
+            # clauses are always sliced from the original, never from a rewrite.
+            masked = list(chunk)
+            quote_end = None
+            pairs = {'"': '"', "“": "”", "‘": "’", "`": "`", "'": "'"}
+            for index, char in enumerate(chunk):
+                if quote_end is not None:
+                    masked[index] = " "
+                    if char == quote_end:
+                        quote_end = None
+                elif char in pairs and not (char == "'" and index > 0 and chunk[index - 1].isalnum()):
+                    quote_end = pairs[char]
+                    masked[index] = " "
+            for match in re.finditer(r"[^.!?]+(?:[.!?]+|$)", "".join(masked)):
+                visible = match.group().strip()
+                if not visible:
                     continue
-                last_token_end = tokens[trigger_idx + len(sequence) - 1][2]
-                captured = cls._capture_after(text, last_token_end, max_chars)
-                if captured is None:
+                # Exclude a quote-only suffix instead of inheriting the previous
+                # paragraph's retention intent. Keep full wrapped conditions.
+                start = match.start() + len(match.group()) - len(match.group().lstrip())
+                end = match.end() - (len(match.group()) - len(match.group().rstrip()))
+                clause = chunk[start:end].strip()
+                tokens = cls._tokenize(clause)
+                if len(clause) < 10 or not tokens:
                     continue
-                return captured
-        return None
+                if any(cls._matches_sequence(tokens, 0, sequence)
+                       for sequence, _ in cls._PREFERENCE_TRIGGERS):
+                    corrections.append(clause)
+                elif corrections and clause.casefold().startswith(("use ", "hãy dùng ")):
+                    corrections[-1] += " " + clause
+        return corrections
 
     @classmethod
     def _matches_sequence(
@@ -1157,56 +1229,11 @@ class TrafficLearner:
                 return False
         return True
 
-    @classmethod
-    def _capture_after(
-        cls,
-        text: str,
-        capture_after_pos: int,
-        max_chars: int,
-    ) -> str | None:
-        """Capture up to ``max_chars`` of content starting at the first
-        non-whitespace, non-pre-punct character after ``capture_after_pos``.
-
-        Returns ``None`` when the capture would have to truncate past
-        ``max_chars`` without hitting a sentence terminator or
-        end-of-input. Returns ``None`` for captures shorter than 10
-        chars (those are noise — likely a stray trigger word with no
-        real correction following it).
-        """
-
-        n = len(text)
-        cap_start = capture_after_pos
-        while cap_start < n and (
-            text[cap_start].isspace() or text[cap_start] in cls._PRE_CAPTURE_PUNCT
-        ):
-            cap_start += 1
-
-        cap_end = cap_start
-        while (
-            cap_end < n
-            and (cap_end - cap_start) < max_chars
-            and text[cap_end] not in cls._SENTENCE_TERMINATORS
-        ):
-            cap_end += 1
-
-        length = cap_end - cap_start
-        if length < 10:
-            return None
-
-        # If we hit ``max_chars`` without finding a terminator and the
-        # text continues past us, this is a rambling fragment — reject.
-        if length >= max_chars and cap_end < n and text[cap_end] not in cls._SENTENCE_TERMINATORS:
-            return None
-
-        captured = text[cap_start:cap_end].strip()
-        captured = captured.rstrip("".join(cls._SENTENCE_TERMINATORS)).strip()
-        return captured or None
-
     @staticmethod
     def _tokenize(text: str) -> list[tuple[str, int, int]]:
         """Whitespace-split tokenizer.
 
-        Returns ``[(lower_token, start, end), …]``. Positions are byte
+        Returns ``[(lower_token, start, end), …]``. Positions are character
         offsets into the original string so callers can resume
         scanning from the end of a token. Tokens are lowercased once,
         up front, so trigger comparisons don't have to call
@@ -1223,7 +1250,7 @@ class TrafficLearner:
             while i < n and not text[i].isspace():
                 i += 1
             if i > start:
-                out.append((text[start:i].lower(), start, i))
+                out.append((unicodedata.normalize("NFC", text[start:i]).casefold().replace("’", "'"), start, i))
         return out
 
     @staticmethod
@@ -1277,13 +1304,19 @@ class TrafficLearner:
         if h in self._saved_hashes:
             memory_id = self._persisted_ids.get(h)
             if memory_id is not None:
-                await self._bump_persisted_evidence(memory_id)
+                await self._bump_persisted_evidence(memory_id, pattern.metadata.get("evidence_id"))
             return
 
         # Accumulate evidence
         if h in self._pattern_counts:
             existing, count = self._pattern_counts[h]
             count += 1
+            evidence = pattern.metadata.get("evidence_id")
+            if evidence:
+                ids = existing.metadata.setdefault("evidence_ids", [])
+                ids.append(evidence)
+                existing.metadata["evidence_ids"] = ids[-self._max_pending_patterns:]
+                pattern.metadata["evidence_ids"] = existing.metadata["evidence_ids"]
             self._pattern_counts[h] = (existing, count)
             # Mark as most-recently-corroborated so it survives LRU eviction.
             self._pattern_counts.move_to_end(h)
@@ -1292,12 +1325,14 @@ class TrafficLearner:
             # without limit; drop the least-recently-corroborated pending entry.
             if len(self._pattern_counts) >= self._max_pending_patterns:
                 self._pattern_counts.popitem(last=False)
+            if pattern.metadata.get("evidence_id"):
+                pattern.metadata["evidence_ids"] = [pattern.metadata["evidence_id"]]
             self._pattern_counts[h] = (pattern, 1)
-            return  # First sighting — wait for more evidence
 
         # Check if evidence threshold met
         _, count = self._pattern_counts[h]
-        if count >= self._min_evidence:
+        threshold = 1 if pattern.metadata.get("explicit_retention") is True else self._min_evidence
+        if count >= threshold:
             # Ready to save
             del self._pattern_counts[h]
             self._saved_hashes.add(h)
@@ -1350,7 +1385,7 @@ class TrafficLearner:
                 memory_id = getattr(memory, "id", None)
                 if memory_id is not None and pattern.content_hash in self._saved_hashes:
                     self._persisted_ids[pattern.content_hash] = memory_id
-                logger.debug(f"Traffic learner saved pattern: {pattern.content[:80]}")
+                logger.debug("Traffic learner saved pattern hash=%s", pattern.content_hash)
 
             except asyncio.CancelledError:
                 break
@@ -1425,6 +1460,8 @@ class TrafficLearner:
             # If multiple rows share the same content (legacy duplicates),
             # last-wins — we only need one id to target the bump.
             self._persisted_ids[h] = memory_id
+            for identity in metadata.get("evidence_ids", []):
+                self._seen_preferences[f"{h}:{identity}"] = None
 
     def _pending_state_path(self) -> Path | None:
         """Sidecar JSON next to memory.db holding sub-threshold evidence."""
@@ -1499,10 +1536,12 @@ class TrafficLearner:
                     content_hash=h,
                 )
                 self._pattern_counts[h] = (pattern, max(1, int(entry.get("count", 1))))
+                for identity in pattern.metadata.get("evidence_ids", []):
+                    self._seen_preferences[f"{h}:{identity}"] = None
             except Exception:
                 continue
 
-    async def _bump_persisted_evidence(self, memory_id: str) -> None:
+    async def _bump_persisted_evidence(self, memory_id: str, evidence_id: str | None = None) -> None:
         """Atomically increment a persisted row's metadata.evidence_count."""
         db_path = _resolve_backend_db_path(self._backend)
         if db_path is None or not db_path.exists():
@@ -1513,6 +1552,21 @@ class TrafficLearner:
         def _bump() -> bool:
             conn = sqlite3.connect(str(db_path))
             try:
+                if evidence_id is not None:
+                    conn.execute("BEGIN IMMEDIATE")
+                    row = conn.execute("SELECT metadata FROM memories WHERE id = ?", (memory_id,)).fetchone()
+                    if row is None:
+                        return False
+                    metadata = json.loads(row[0] or "{}")
+                    ids = metadata.get("evidence_ids", [])
+                    if evidence_id in ids:
+                        return False
+                    metadata["evidence_ids"] = (ids + [evidence_id])[-self._max_pending_patterns:]
+                    metadata["evidence_count"] = metadata.get("evidence_count", 0) + 1
+                    metadata["last_seen_at"] = now_iso
+                    conn.execute("UPDATE memories SET metadata = ? WHERE id = ?", (json.dumps(metadata), memory_id))
+                    conn.commit()
+                    return True
                 cursor = conn.execute(
                     "UPDATE memories SET metadata = json_set("
                     "metadata, '$.evidence_count', "

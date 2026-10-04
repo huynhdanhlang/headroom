@@ -155,9 +155,15 @@ class ProjectResolver:
         the injected memory block.
         """
 
+        # A native session lookup failure cannot fall back to an obsolete CLI
+        # root or a cached prompt's environment. Inference still routes normally.
+        if self._first_nonempty_header(ctx.headers, "x-headroom-memory-unresolved") == "true":
+            return None
         # Tier 1: client-provided explicit project id (any client).
         explicit = self._first_nonempty_header(ctx.headers, "x-headroom-project-id")
         if explicit:
+            if self._first_nonempty_header(ctx.headers, "x-headroom-scope-encoding") == "uri-component":
+                explicit = unquote(explicit)
             safe = self._sanitize_basename(explicit)
             if safe:
                 # Append a digest of the raw id like `_identity_from_cwd` does:

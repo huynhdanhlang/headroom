@@ -148,6 +148,9 @@ class LocalBackend:
         """
         # Fast path: already initialized, no lock contention.
         if self._initialized:
+            repair = getattr(self._hierarchical_memory, "recover_pending_indexes", None)
+            if callable(repair):
+                await repair()
             return
 
         lock = self._get_init_lock()
@@ -222,6 +225,7 @@ class LocalBackend:
             self._graph = InMemoryGraphStore()
             logger.info("LocalBackend: Using InMemoryGraphStore (unbounded)")
 
+        await self._hierarchical_memory.recover_pending_indexes()
         self._initialized = True
 
     # =========================================================================
@@ -243,6 +247,8 @@ class LocalBackend:
         facts: list[str] | None = None,
         extracted_entities: list[dict[str, str]] | None = None,
         extracted_relationships: list[dict[str, str]] | None = None,
+        *,
+        evidence_key: str | None = None,
     ) -> Memory:
         """Save a memory with optional entities and relationships.
 
@@ -318,7 +324,18 @@ class LocalBackend:
                 )
 
         # Prepare base metadata
-        base_metadata = metadata or {}
+        base_metadata = dict(metadata or {})
+        if evidence_key is not None:
+            import hashlib
+            import json
+
+            payload = {"content": content, "facts": facts, "importance": importance,
+                       "entities": entities, "relationships": relationships,
+                       "extracted_entities": extracted_entities,
+                       "extracted_relationships": extracted_relationships}
+            base_metadata["event_payload_hash"] = hashlib.sha256(
+                json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
         if has_pre_extraction:
             base_metadata["_pre_extracted"] = True
             if facts:
@@ -340,6 +357,7 @@ class LocalBackend:
                     importance=importance,
                     entity_refs=all_entity_names,
                     metadata=fact_metadata,
+                    evidence_key=(evidence_key if i == 0 else f"{evidence_key}:fact:{i}") if evidence_key is not None else None,
                 )
                 memories_created.append(memory)
         else:
@@ -353,11 +371,14 @@ class LocalBackend:
                 importance=importance,
                 entity_refs=all_entity_names,
                 metadata=base_metadata,
+                evidence_key=evidence_key,
             )
             memories_created.append(memory)
 
         # Get primary memory (first created) for graph linking
         primary_memory = memories_created[0]
+        if not primary_memory.is_current:
+            return primary_memory
 
         # Add entities to graph
         if all_entity_names:
@@ -444,6 +465,14 @@ class LocalBackend:
             top_k=top_k * 2 if include_related else top_k,  # Over-fetch for deduplication
             min_similarity=min_similarity,
         )
+        primary_rows = {m.id: m for m in await self._hierarchical_memory.store.get_batch(
+            [r.memory.id for r in vector_results])}
+        vector_results = [r for r in vector_results if r.memory.id in primary_rows
+                          and primary_rows[r.memory.id].user_id == user_id
+                          and primary_rows[r.memory.id].is_current
+                          and not primary_rows[r.memory.id].superseded_by]
+        for result in vector_results:
+            result.memory = primary_rows[result.memory.id]
 
         # Convert to MemorySearchResult and collect entity refs
         results: list[MemorySearchResult] = []
@@ -498,7 +527,7 @@ class LocalBackend:
                 # Fetch related memories not already in results
                 new_memory_ids = related_memory_ids - seen_memory_ids
                 for mem_id in new_memory_ids:
-                    memory = await self._hierarchical_memory.get(mem_id)
+                    memory = await self._hierarchical_memory.store.get(mem_id)
                     if (
                         memory is None
                         or memory.user_id != user_id
@@ -553,6 +582,8 @@ class LocalBackend:
         new_content: str,
         reason: str | None = None,
         user_id: str | None = None,
+        *,
+        expected_content_hash: str | None = None,
     ) -> Memory:
         """Update a memory with new content (creates versioned history).
 
@@ -571,10 +602,6 @@ class LocalBackend:
         Raises:
             ValueError: If the memory is not found.
         """
-        # Note: reason and user_id are accepted for protocol compliance
-        # but not yet used in the underlying implementation
-        _ = reason
-        _ = user_id
         await self._ensure_initialized()
         assert self._hierarchical_memory is not None
 
@@ -582,9 +609,22 @@ class LocalBackend:
         new_memory = await self._hierarchical_memory.supersede(
             old_memory_id=memory_id,
             new_content=new_content,
+            expected_user_id=user_id,
+            expected_content_hash=expected_content_hash,
+            metadata_updates={"update_reason": reason} if reason is not None else None,
         )
 
         return new_memory
+
+    async def delete_memory_guarded(
+        self, memory_id: str, user_id: str, expected_content_hash: str, reason: str,
+    ) -> bool:
+        """Explicit forget: guarded active recall removal, not history purge."""
+        await self._ensure_initialized()
+        assert self._hierarchical_memory is not None
+        return await self._hierarchical_memory.forget(
+            memory_id, user_id=user_id, expected_content_hash=expected_content_hash, reason=reason,
+        )
 
     async def detach_supersession(
         self,
@@ -658,6 +698,16 @@ class LocalBackend:
         assert self._hierarchical_memory is not None
 
         return await self._hierarchical_memory.get(memory_id)
+
+    async def list_memories(self, user_id: str, limit: int = 10) -> list[Memory]:
+        """Browse active retained rows by recency, without an empty vector query."""
+        from headroom.memory.ports import MemoryFilter
+
+        await self._ensure_initialized()
+        assert self._hierarchical_memory is not None
+        return await self._hierarchical_memory.store.query(
+            MemoryFilter(user_id=user_id, limit=limit, order_by="created_at", order_desc=True)
+        )
 
     # =========================================================================
     # Capability Properties
@@ -833,16 +883,20 @@ class LocalBackend:
         # Use the protocol-compliant search_memories method on the text index
         text_index = self._hierarchical_memory.text_index
         text_results = await text_index.search_memories(text_filter)  # type: ignore[attr-defined]
+        primary_rows = {m.id: m for m in await self._hierarchical_memory.store.get_batch(
+            [r.memory.id for r in text_results])}
 
         # Convert to MemorySearchResult
         return [
             MemorySearchResult(
-                memory=tr.memory,
+                memory=primary_rows[tr.memory.id],
                 score=tr.score,
-                related_entities=normalize_entity_refs(tr.memory.entity_refs),
+                related_entities=normalize_entity_refs(primary_rows[tr.memory.id].entity_refs),
                 related_memories=[],
             )
             for tr in text_results
+            if tr.memory.id in primary_rows and primary_rows[tr.memory.id].user_id == user_id
+            and primary_rows[tr.memory.id].is_current and not primary_rows[tr.memory.id].superseded_by
         ]
 
     async def hybrid_search(
@@ -853,6 +907,9 @@ class LocalBackend:
         vector_weight: float = 0.5,
         text_weight: float = 0.5,
         min_similarity: float = 0.0,
+        *,
+        entities: list[str] | None = None,
+        include_related: bool = False,
     ) -> list[MemorySearchResult]:
         """Hybrid search combining vector similarity and text matching.
 
@@ -880,7 +937,7 @@ class LocalBackend:
             query=query,
             user_id=user_id,
             top_k=fetch_k,
-            include_related=False,
+            include_related=include_related,
             min_similarity=min_similarity,
         )
 
@@ -913,6 +970,9 @@ class LocalBackend:
         # Calculate combined scores
         combined_results: list[tuple[float, MemorySearchResult]] = []
         for memory_id, result in all_memories.items():
+            if entities and not any(ref.casefold() in {e.casefold() for e in normalize_entity_refs(entities)}
+                                    for ref in result.related_entities):
+                continue
             v_score = vector_scores.get(memory_id, 0.0)
             t_score = text_scores.get(memory_id, 0.0)
             combined = vector_weight * v_score + text_weight * t_score

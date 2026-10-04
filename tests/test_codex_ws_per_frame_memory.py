@@ -192,7 +192,29 @@ async def test_memory_lookup_runs_for_each_issue_artifact_frame_and_preserves_no
     expected_tools = [*_client_response_tools(), *_expected_memory_response_tools()]
     for frame in forwarded_turns:
         assert frame["response"]["tools"] == expected_tools
+        assert "first source of truth" not in frame["response"].get("instructions", "")
+        assert "Current project" in frame["response"].get("instructions", "")
     assert forwarded_turns[0]["response"]["tools"] == forwarded_turns[1]["response"]["tools"]
+
+
+async def test_native_ws_client_keeps_tool_ownership_and_instruction_prefix():
+    upstream = _FakeUpstream([
+        json.dumps({"type": "response.created", "response": {"id": "native-r1"}}),
+        json.dumps({"type": "response.completed", "response": {"id": "native-r1"}}),
+    ])
+    frame = _turn_with_tools("current query", _client_response_tools())
+    data = json.loads(frame)
+    data["response"]["instructions"] = "Current project authoritative prefix"
+    client_ws = _FakeWebSocket(frames=[json.dumps(data)])
+    client_ws.headers["x-headroom-memory-tools"] = "client"
+    handler = _DummyOpenAIHandler()
+    handler.memory_handler = _MemoryHandler()
+    with patch.dict(sys.modules, {"websockets": _make_fake_websockets_module(upstream)}):
+        await handler.handle_openai_responses_ws(client_ws)
+    forwarded = json.loads(upstream.sent[0])["response"]
+    assert forwarded["tools"] == data["response"]["tools"]
+    assert forwarded["instructions"] == "Current project authoritative prefix"
+    assert "current memory:" in forwarded["input"]
 
 
 @pytest.mark.asyncio

@@ -1223,6 +1223,8 @@ class StreamingMixin:
             memory_user_id is not None
             and self.memory_handler is not None
             and provider == "anthropic"
+            and not (memory_request_ctx is not None
+                     and memory_request_ctx.headers.get("x-headroom-memory-tools") == "client")
         )
 
         # Open connection before generator to capture upstream response headers

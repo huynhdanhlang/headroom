@@ -12687,7 +12687,7 @@ function mergeFetchHeaders(input, init, upstream, originalPath = void 0, project
     headers.set(ORIGINAL_PATH_HEADER, originalPath);
   }
   if (project) {
-    headers.set(PROJECT_HEADER, project);
+    headers.set(PROJECT_HEADER, /[^\x00-\xff]/.test(project) ? encodeURIComponent(project) : project);
   }
   return headers;
 }

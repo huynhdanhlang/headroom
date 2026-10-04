@@ -19,11 +19,13 @@ function host(options: Record<string, unknown>, directory = "/workspace/one") {
     options,
     location: { directory },
     session: {
+      get: async () => ({ location: { directory } }),
       hook: async (name: string, callback: (event: SessionHttpRequest) => Promise<void> | void) => {
         hooks.set(name, callback);
         return { dispose: async () => { hooks.delete(name); } };
       },
     },
+    tool: { transform: async () => ({ dispose: async () => {} }) },
   } as unknown as Context;
   return {
     ctx,
@@ -117,7 +119,7 @@ describe("Headroom native OpenCode V2 request routing", () => {
     }
   });
 
-  it("does not intercept documentation, excluded hosts, local MCP or already-routed requests", async () => {
+  it("decorates already-routed inference but leaves documentation, excluded hosts and MCP untouched", async () => {
     const plugin = await loadV2();
     expect(plugin?.setup).toBeTypeOf("function");
     if (!plugin) return;
@@ -127,7 +129,12 @@ describe("Headroom native OpenCode V2 request routing", () => {
       for (const url of ["https://api.openai.com/v1/models", "https://sub.example.com/v1/responses",
         "http://127.0.0.1:4445/mcp", "http://127.0.0.1:8787/v1/responses"]) {
         const original = new Request(url);
-        expect(await runtime.dispatch(original)).toBe(original);
+        const routed = await runtime.dispatch(original);
+        if (url === "http://127.0.0.1:8787/v1/responses") {
+          expect(routed.url).toBe(original.url);
+          expect(routed.headers.get("x-headroom-cwd")).toBe(encodeURIComponent("/workspace/one"));
+          expect(routed.headers.get("x-headroom-memory-tools")).toBe("client");
+        } else expect(routed).toBe(original);
       }
     } finally { await cleanup?.(); }
   });
@@ -155,5 +162,37 @@ describe("Headroom native OpenCode V2 request routing", () => {
       const direct = new Request("https://api.openai.com/v1/responses");
       expect(await first.dispatch(direct)).toBe(direct);
     } finally { await disposeSecond?.(); }
+  });
+
+  it("uses each current session directory rather than the plugin location", async () => {
+    const plugin = await loadV2();
+    const runtime = host({ proxyUrl: "http://127.0.0.1:8787" });
+    let directory = "/workspace/tiếng Việt 100%";
+    runtime.ctx.session.get = async () => ({ location: { directory } }) as never;
+    const cleanup = await plugin!.setup(runtime.ctx);
+    try {
+      const first = await runtime.dispatch(new Request("https://api.openai.com/v1/responses"));
+      expect(first.headers.get("x-headroom-cwd")).toBe(encodeURIComponent(directory));
+      expect(first.headers.get("x-headroom-memory-tools")).toBe("client");
+      directory = "/workspace/moved";
+      const moved = await runtime.dispatch(new Request("https://api.openai.com/v1/responses"));
+      expect(moved.headers.get("x-headroom-cwd")).toBe(encodeURIComponent(directory));
+    } finally { await cleanup?.(); }
+  });
+
+  it("cannot reuse a stale scope when session lookup fails", async () => {
+    const plugin = await loadV2();
+    const runtime = host({ proxyUrl: "http://127.0.0.1:8787" });
+    runtime.ctx.session.get = async () => { throw new Error("unknown session"); };
+    const cleanup = await plugin!.setup(runtime.ctx);
+    try {
+      const request = await runtime.dispatch(new Request("https://api.openai.com/v1/responses", {
+        headers: { "x-headroom-cwd": "/forged", "x-headroom-project-id": "stale" },
+      }));
+      expect(request.url).toBe("http://127.0.0.1:8787/v1/responses");
+      expect(request.headers.get("x-headroom-cwd")).toBeNull();
+      expect(request.headers.get("x-headroom-project-id")).toBeNull();
+      expect(request.headers.get("x-headroom-memory-unresolved")).toBe("true");
+    } finally { await cleanup?.(); }
   });
 });

@@ -278,6 +278,10 @@ class MemoryStore(Protocol):
         """
         ...
 
+    async def save_if_absent(self, memory: Memory) -> tuple[Memory, bool]:
+        """Atomically insert an evidence ID or return identical retained evidence."""
+        ...
+
     async def save_batch(self, memories: list[Memory]) -> None:
         """
         Save multiple memories in a single operation.
@@ -380,6 +384,9 @@ class MemoryStore(Protocol):
         old_memory_id: str,
         new_memory: Memory,
         supersede_time: datetime | None = None,
+        *,
+        expected_content_hash: str | None = None,
+        expected_user_id: str | None = None,
     ) -> Memory:
         """
         Supersede an existing memory with a new version.
@@ -395,6 +402,12 @@ class MemoryStore(Protocol):
         Returns:
             The saved new memory with lineage fields populated.
         """
+        ...
+
+    async def forget(
+        self, memory_id: str, *, user_id: str, expected_content_hash: str, reason: str,
+    ) -> bool:
+        """Guarded active recall removal; adapters may reject unsupported guards."""
         ...
 
     async def detach_supersession(

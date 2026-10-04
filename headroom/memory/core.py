@@ -8,13 +8,15 @@ embedding, indexing, caching, and memory bubbling.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from headroom.memory.config import MemoryConfig
 from headroom.memory.factory import create_memory_system
-from headroom.memory.models import Memory, ScopeLevel
+from headroom.memory.models import Memory, MemoryConflictError, ScopeLevel
 from headroom.memory.ports import MemoryFilter, TextFilter, VectorFilter
 
 if TYPE_CHECKING:
@@ -140,6 +142,8 @@ class HierarchicalMemory:
         metadata: dict[str, Any] | None = None,
         auto_embed: bool = True,
         auto_bubble: bool | None = None,
+        *,
+        evidence_key: str | None = None,
     ) -> Memory:
         """Add a new memory to the system.
 
@@ -181,6 +185,11 @@ class HierarchicalMemory:
             entity_refs=entity_refs or [],
             metadata=metadata or {},
         )
+        if evidence_key is not None:
+            identity = json.dumps([user_id, session_id, agent_id, turn_id, evidence_key], ensure_ascii=False)
+            memory.id = "evidence-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+            memory.metadata = {**memory.metadata, "evidence_key": evidence_key}
+            memory.metadata["index_pending"] = True
 
         # Generate embedding if requested
         if auto_embed:
@@ -188,7 +197,13 @@ class HierarchicalMemory:
             memory.embedding = embedding
 
         # Save to store
-        await self._store.save(memory)
+        if evidence_key is None:
+            await self._store.save(memory)
+        else:
+            memory, inserted = await self._store.save_if_absent(memory)
+            memory.replayed = not inserted
+            if not memory.is_current or memory.superseded_by or memory.metadata.get("forgotten_at"):
+                return memory
 
         # Index for vector search
         if memory.embedding is not None:
@@ -203,10 +218,13 @@ class HierarchicalMemory:
 
         # Handle bubbling
         should_bubble = auto_bubble if auto_bubble is not None else self._config.auto_bubble
-        if should_bubble:
+        if should_bubble and not memory.replayed:
             await self._maybe_bubble(memory)
 
         logger.debug(f"Added memory {memory.id} at scope {memory.scope_level.value}")
+        if evidence_key is not None and memory.metadata.get("index_pending"):
+            await self._store.mark_indexed(memory.id)
+            memory.metadata.pop("index_pending", None)
         return memory
 
     async def add_batch(
@@ -438,6 +456,15 @@ class HierarchicalMemory:
             limit=limit,
         )
 
+        from headroom.memory.adapters.fts5 import FTS5TextIndex
+        if isinstance(self._text_index, FTS5TextIndex):
+            results = await self._text_index.search_memories(text_filter)
+            primary = {m.id: m for m in await self._store.get_batch([r.memory.id for r in results])}
+            results = [r for r in results if r.memory.id in primary and primary[r.memory.id].is_current
+                       and (user_id is None or primary[r.memory.id].user_id == user_id)]
+            for result in results:
+                result.memory = primary[result.memory.id]
+            return results
         return await self._text_index.search(text_filter)
 
     # =========================================================================
@@ -532,6 +559,10 @@ class HierarchicalMemory:
         new_content: str,
         supersede_time: datetime | None = None,
         auto_embed: bool = True,
+        *,
+        expected_content_hash: str | None = None,
+        expected_user_id: str | None = None,
+        metadata_updates: dict | None = None,
     ) -> Memory:
         """Supersede an existing memory with a new version.
 
@@ -559,8 +590,11 @@ class HierarchicalMemory:
         """
         # Get old memory
         old_memory = await self._store.get(old_memory_id)
-        if old_memory is None:
-            raise ValueError(f"Memory {old_memory_id} not found")
+        if (old_memory is None or not old_memory.is_current or old_memory.superseded_by
+                or old_memory.metadata.get("forgotten_at")
+                or (expected_user_id is not None and old_memory.user_id != expected_user_id)
+                or (expected_content_hash is not None and old_memory.content_hash != expected_content_hash)):
+            raise MemoryConflictError("Memory owner/version conflict")
 
         # Create new memory with same scope
         new_memory = Memory(
@@ -571,7 +605,7 @@ class HierarchicalMemory:
             turn_id=old_memory.turn_id,
             importance=old_memory.importance,
             entity_refs=old_memory.entity_refs.copy(),
-            metadata=old_memory.metadata.copy(),
+            metadata={**old_memory.metadata, **(metadata_updates or {})},
         )
 
         # Embed new content
@@ -579,7 +613,10 @@ class HierarchicalMemory:
             new_memory.embedding = await self._embedder.embed(new_content)
 
         # Perform supersession in store
-        new_memory = await self._store.supersede(old_memory_id, new_memory, supersede_time)
+        guards = {}
+        if expected_content_hash is not None or expected_user_id is not None:
+            guards = {"expected_content_hash": expected_content_hash, "expected_user_id": expected_user_id}
+        new_memory = await self._store.supersede(old_memory_id, new_memory, supersede_time, **guards)
 
         # Drop the OLD entry from the search indexes. The store keeps its row
         # (valid_until is now set) so get_history still works, but the vector and
@@ -602,7 +639,42 @@ class HierarchicalMemory:
             await self._cache.put(new_memory)
 
         logger.debug(f"Superseded memory {old_memory_id} with {new_memory.id}")
+        if new_memory.metadata.get("index_pending"):
+            await self._store.mark_indexed(new_memory.id)
+            new_memory.metadata.pop("index_pending", None)
         return new_memory
+
+    async def recover_pending_indexes(self, limit: int = 100) -> int:
+        """Bounded recovery from committed SQLite evidence, not a second queue."""
+        if not callable(getattr(self._store, "mark_indexed", None)):
+            return 0
+        pending = await self._store.query(MemoryFilter(limit=limit, metadata_filters={"index_pending": True}))
+        for memory in pending:
+            if memory.supersedes:
+                await self._vector_index.remove(memory.supersedes)
+                await self._text_index.remove(memory.supersedes)
+            if memory.embedding is not None:
+                await self._vector_index.index(memory)
+            await self._index_for_text_search(memory)
+            if self._cache is not None:
+                if memory.supersedes:
+                    await self._cache.invalidate(memory.supersedes)
+                await self._cache.put(memory)
+            await self._store.mark_indexed(memory.id)
+        return len(pending)
+
+    async def forget(
+        self, memory_id: str, *, user_id: str, expected_content_hash: str, reason: str,
+    ) -> bool:
+        """Remove active recall only after the primary store commits the guard."""
+        forgotten = await self._store.forget(
+            memory_id, user_id=user_id, expected_content_hash=expected_content_hash, reason=reason,
+        )
+        await self._vector_index.remove(memory_id)
+        await self._text_index.remove(memory_id)
+        if self._cache is not None:
+            await self._cache.invalidate(memory_id)
+        return forgotten
 
     async def detach_supersession(
         self,

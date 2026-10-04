@@ -2634,7 +2634,7 @@ class TestExtractPreferencesSentenceBoundary:
     def _learner(self) -> TrafficLearner:
         return TrafficLearner(backend=None, min_evidence=1)
 
-    def test_long_unbroken_paragraph_yields_no_preference(self) -> None:
+    def test_long_complete_correction_is_retained_as_advisory(self) -> None:
         learner = self._learner()
         # 100+ chars after the trigger word with no '.', '!', '?', or
         # '\n' anywhere — the kind of payload that would have matched
@@ -2645,7 +2645,10 @@ class TestExtractPreferencesSentenceBoundary:
             "don't use Grep when running benchmarks because it floods the output "
             "buffer with a lot of irrelevant context that"
         )
-        assert learner._extract_preferences(long_no_terminator) == []
+        out = learner._extract_preferences(long_no_terminator)
+        assert len(out) == 1
+        assert out[0].metadata["source_text"] == long_no_terminator
+        assert out[0].metadata["explicit_retention"] is False
 
     def test_short_utterance_without_terminator_still_matches(self) -> None:
         # Relaxation: a short user utterance without trailing
@@ -2657,7 +2660,7 @@ class TestExtractPreferencesSentenceBoundary:
         assert len(out) == 1
         assert "git push" in out[0].content
 
-    def test_terminator_inside_window_captures_to_terminator(self) -> None:
+    def test_prohibition_keeps_its_requested_replacement(self) -> None:
         learner = self._learner()
         # The capture should end at the first '.', not include the
         # following sentence.
@@ -2666,17 +2669,16 @@ class TestExtractPreferencesSentenceBoundary:
         )
         assert len(out) == 1
         content = out[0].content
-        assert "Use ripgrep instead" not in content
+        assert "Use ripgrep instead because it is faster." in content
+        assert "don't use Grep at all." in content
         assert "Grep" in content
 
-    def test_trailing_terminator_is_stripped(self) -> None:
+    def test_original_sentence_terminator_is_preserved(self) -> None:
         learner = self._learner()
         out = learner._extract_preferences("Never commit secrets to git.")
         assert len(out) == 1
-        # Pref must not end on its sentence terminator.
-        assert not out[0].content.endswith(".")
-        assert not out[0].content.endswith("!")
-        assert not out[0].content.endswith("?")
+        assert out[0].metadata["source_text"] == "Never commit secrets to git."
+        assert out[0].content.endswith("Never commit secrets to git.")
 
 
 # =============================================================================

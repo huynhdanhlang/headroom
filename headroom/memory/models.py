@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -63,6 +64,10 @@ class ScopeLevel(Enum):
     TURN = "turn"  # Ephemeral, single LLM call
 
 
+class MemoryConflictError(ValueError):
+    """The requested owner or active version no longer matches."""
+
+
 @dataclass
 class Memory:
     """A hierarchically-scoped memory with temporal awareness."""
@@ -103,6 +108,13 @@ class Memory:
 
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Per-operation result, not persisted evidence or a confidence increment.
+    replayed: bool = False
+
+    @property
+    def content_hash(self) -> str:
+        """Version guard over exact authored UTF-8 bytes, never a summary."""
+        return "sha256:" + hashlib.sha256(self.content.encode("utf-8")).hexdigest()
 
     @property
     def scope_level(self) -> ScopeLevel:
@@ -125,6 +137,7 @@ class Memory:
         return {
             "id": self.id,
             "content": self.content,
+            "content_hash": self.content_hash,
             "user_id": self.user_id,
             "session_id": self.session_id,
             "agent_id": self.agent_id,

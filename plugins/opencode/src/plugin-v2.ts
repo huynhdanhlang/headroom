@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode/plugin/promise/plugin";
 import type { HeadroomOpenCodePluginOptions } from "./plugin.js";
 import { resolveProxyUrl } from "./proxy-url.js";
 import { routeHeadroomRequest } from "./transport.js";
+import { registerMemoryV2, resolveMemorySessionScope } from "./memory-v2.js";
 
 /** Native V2 adapter. V1 factories and child-process transport remain unchanged. */
 export const HeadroomV2Plugin: Plugin = {
@@ -15,14 +16,19 @@ export const HeadroomV2Plugin: Plugin = {
     }
     const project = options.project ?? ctx.location.project?.id ?? ctx.location.directory;
     const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(proxy.hostname);
+    const disposeMemory = await registerMemoryV2(ctx, options);
     // Bounded pending transports scoped to this host; HTTP responses clear
     // ownership so upstream rate limits/errors keep OpenCode's normal retries.
     const pending = new Set<string>();
     const key = (event: { sessionID: string; agent: string; model: unknown }) =>
       JSON.stringify([event.sessionID, event.agent, event.model]);
-    const registration = await ctx.session.hook("http.request", (event) => {
+    const registration = await ctx.session.hook("http.request", async (event) => {
+      let scope: { cwd: string; projectID?: string } | undefined;
+      try { scope = await resolveMemorySessionScope(ctx, event.sessionID, options.project); } catch { /* Fail closed for memory, not inference. */ }
       const routed = routeHeadroomRequest(event.request, {
         proxyUrl, project, excludeHosts: options.excludeHosts,
+        cwd: scope?.cwd, memoryProjectID: scope?.projectID,
+        clientMemoryTools: loopback, memoryUnresolved: !scope,
       });
       pending.delete(key(event));
       if (loopback && routed !== event.request) {
@@ -43,6 +49,7 @@ export const HeadroomV2Plugin: Plugin = {
       await registration.dispose();
       await response.dispose();
       await retry.dispose();
+      await disposeMemory();
       pending.clear();
     };
   },

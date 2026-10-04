@@ -13,11 +13,12 @@ import contextlib
 import json
 import re
 import sqlite3
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..models import Memory, ScopeLevel, normalize_entity_refs
+from ..models import Memory, MemoryConflictError, ScopeLevel, normalize_entity_refs
 from ..ports import MemoryFilter
 
 if TYPE_CHECKING:
@@ -276,6 +277,28 @@ class SQLiteMemoryStore:
                 row,
             )
             conn.commit()
+
+    async def save_if_absent(self, memory: Memory) -> tuple[Memory, bool]:
+        """Insert one evidence identity atomically, or return its unchanged row."""
+        with self._get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM memories WHERE id = ?", (memory.id,)).fetchone()
+            if row is not None:
+                existing = self._row_to_memory(row)
+                # Operational/audit metadata may evolve. Original provenance may not.
+                authored_keys = ("source_text", "source", "source_agent", "workspace_key", "evidence_key", "event_payload_hash")
+                if (existing.content != memory.content or existing.user_id != memory.user_id
+                        or existing.session_id != memory.session_id or existing.agent_id != memory.agent_id
+                        or existing.turn_id != memory.turn_id
+                        or any(existing.metadata.get(k) != memory.metadata.get(k) for k in authored_keys)):
+                    raise MemoryConflictError("Evidence identity/content conflict")
+                return existing, False
+            values = self._memory_to_row(memory)
+            # Column names come solely from our fixed serializer, never user metadata.
+            columns = ", ".join(values)
+            placeholders = ", ".join(":" + key for key in values)
+            conn.execute(f"INSERT INTO memories ({columns}) VALUES ({placeholders})", values)
+        return memory, True
 
     async def save_batch(self, memories: list[Memory]) -> None:
         """Save multiple memories in a single transaction.
@@ -653,6 +676,9 @@ class SQLiteMemoryStore:
         old_memory_id: str,
         new_memory: Memory,
         supersede_time: datetime | None = None,
+        *,
+        expected_content_hash: str | None = None,
+        expected_user_id: str | None = None,
     ) -> Memory:
         """Supersede an existing memory with a new version.
 
@@ -673,21 +699,15 @@ class SQLiteMemoryStore:
         if supersede_time is None:
             supersede_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
-        # Get the old memory
-        old_memory = await self.get(old_memory_id)
-        if old_memory is None:
-            raise ValueError(f"Memory with ID {old_memory_id} not found")
-
-        # Update old memory's valid_until and superseded_by
-        old_memory.valid_until = supersede_time
-        old_memory.superseded_by = new_memory.id
-
-        # Set up new memory's lineage
-        new_memory.supersedes = old_memory_id
-        new_memory.valid_from = supersede_time
-
-        # Save both in a transaction
         with self._get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            old_memory = self._require_current(conn, old_memory_id, expected_user_id, expected_content_hash)
+            if expected_user_id is not None and new_memory.user_id != old_memory.user_id:
+                raise MemoryConflictError("Memory owner/version conflict")
+            if conn.execute("SELECT 1 FROM memories WHERE id = ?", (new_memory.id,)).fetchone():
+                raise MemoryConflictError("Successor already exists")
+            successor = replace(new_memory, supersedes=old_memory_id, valid_from=supersede_time,
+                                metadata={**new_memory.metadata, "index_pending": True})
             # Update old memory
             conn.execute(
                 """
@@ -699,10 +719,10 @@ class SQLiteMemoryStore:
             )
 
             # Insert new memory
-            row = self._memory_to_row(new_memory)
+            row = self._memory_to_row(successor)
             conn.execute(
                 """
-                INSERT OR REPLACE INTO memories (
+                INSERT INTO memories (
                     id, content, user_id, session_id, agent_id, turn_id,
                     created_at, valid_from, valid_until,
                     category, importance,
@@ -722,7 +742,39 @@ class SQLiteMemoryStore:
             )
             conn.commit()
 
-        return new_memory
+        return successor
+
+    async def mark_indexed(self, memory_id: str) -> None:
+        """Acknowledge index maintenance without overwriting concurrent lineage."""
+        with self._get_conn() as conn:
+            conn.execute("""UPDATE memories SET metadata = json_remove(metadata, '$.index_pending')
+                            WHERE id = ? AND valid_until IS NULL AND superseded_by IS NULL""", (memory_id,))
+
+    def _require_current(
+        self, conn: sqlite3.Connection, memory_id: str,
+        user_id: str | None, content_hash: str | None,
+    ) -> Memory:
+        row = conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
+        memory = self._row_to_memory(row) if row is not None else None
+        if (memory is None or not memory.is_current or memory.superseded_by
+                or memory.metadata.get("forgotten_at")
+                or (user_id is not None and memory.user_id != user_id)
+                or (content_hash is not None and memory.content_hash != content_hash)):
+            raise MemoryConflictError("Memory owner/version conflict")
+        return memory
+
+    async def forget(
+        self, memory_id: str, *, user_id: str, expected_content_hash: str, reason: str,
+    ) -> bool:
+        """End active recall atomically; retain exact evidence and audit history."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        with self._get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            memory = self._require_current(conn, memory_id, user_id, expected_content_hash)
+            metadata = {**memory.metadata, "forgotten_at": now, "forget_reason": reason}
+            conn.execute("UPDATE memories SET valid_until = ?, metadata = ? WHERE id = ?",
+                         (now, json.dumps(metadata), memory_id))
+        return True
 
     async def detach_supersession(
         self,

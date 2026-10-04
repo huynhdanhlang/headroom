@@ -9,6 +9,32 @@ Pin this host's immutable platform digest rather than waiting for the multi-arch
 
 ## Synchronization through 1cf49661 (2026-10-04)
 
+### Qualified feedback-memory source — activation separately verified
+
+The isolated `fix/feedback-memory` worktree repairs authored English/Vietnamese
+feedback, exact owner/content-hash supersession and retained forget, durable
+evidence-key replay, and a bounded local command adapter consumed by native
+OpenCode V2 tools/prompt hooks. Current-session location supplies both tool and
+inference scope; client-owned memory tools are not invisibly executed by the
+proxy. Native recall verifies active primary rows, uses the existing hybrid
+consumer and remains bounded read-only background below current project authority.
+
+Authoring/QA was isolated and uncommitted; source integration and activation were
+subsequently specifically authorized. The checks below remain source evidence,
+not a substitute for release-image or actual resumed-traffic acceptance.
+Disposable ASGI/SQLite/index/native-hook regressions use synthetic projects.
+The final compiled V2 hooks also pass a real HTTP/canonical-handler journey with
+the qualified ONNX model copied byte-for-byte from the existing cache, offline:
+save/replay, fresh backend, relevant-only background, unchanged signed prefix,
+guarded correction/conflict, session move, project isolation and forget. No model
+was downloaded or substituted. This does not establish arbitrary cross-language
+semantic quality or actual installed-host/live acceptance. Three router fixture
+checks fail identically on the untouched baseline and remain a verification gap.
+Exact per-slice evidence, review, source/bundle hashes and proposed activation
+boundary are recorded in the approved `2026-10-04-feedback-memory` Plan and its
+private worktree ledger. Clean commit/build, source integration, stopped-service
+backups, activation and actual resumed-traffic checks require separate authority.
+
 Integrated five commits: streamed injected memory-tool execution, context injection
 past trailing system messages, persisted escaped pattern-ID recognition, Hermes
 documentation and npm maintenance. Upstream now supplies the equivalent learner

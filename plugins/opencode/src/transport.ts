@@ -30,6 +30,10 @@ interface InstallOptions {
   project?: string;
   excludeHosts?: string[];
   debug?: boolean;
+  cwd?: string;
+  memoryProjectID?: string;
+  clientMemoryTools?: boolean;
+  memoryUnresolved?: boolean;
 }
 
 interface TransportState {
@@ -317,7 +321,7 @@ function mergeFetchHeaders(
     headers.set(ORIGINAL_PATH_HEADER, originalPath);
   }
   if (project) {
-    headers.set(PROJECT_HEADER, project);
+    headers.set(PROJECT_HEADER, /[^\x00-\xff]/.test(project) ? encodeURIComponent(project) : project);
   }
   return headers;
 }
@@ -349,10 +353,26 @@ function withRoutedFetchInput(
 /** Route a single host-owned request without installing process-global shims. */
 export function routeHeadroomRequest(request: Request, options: InstallOptions): Request {
   const excludes = normalizeExcludeHosts(options.excludeHosts ?? process.env[EXCLUDE_HOSTS_ENV] ?? "");
+  const proxy = normalizeProxyUrl(options.proxyUrl);
   const [input, init] = withRoutedFetchInput(
-    request, undefined, normalizeProxyUrl(options.proxyUrl), options.project, excludes,
+    request, undefined, proxy, options.project, excludes,
   );
-  return input === request && init === undefined ? request : new Request(input, init);
+  const direct = new URL(request.url);
+  const alreadyRouted = direct.origin === proxy.origin && isLlmEndpointPath(direct.pathname);
+  if (input === request && init === undefined && !alreadyRouted) return request;
+  if (alreadyRouted && !options.clientMemoryTools && !options.memoryUnresolved && !options.cwd && !options.memoryProjectID) return request;
+  const routed = new Request(input, init);
+  if (options.clientMemoryTools || options.memoryUnresolved) {
+    for (const key of ["x-headroom-cwd", "x-headroom-project-id", "x-headroom-memory-unresolved", "x-headroom-scope-encoding"]) routed.headers.delete(key);
+  }
+  if (options.cwd) routed.headers.set("x-headroom-cwd", encodeURIComponent(options.cwd));
+  if (options.memoryProjectID) {
+    routed.headers.set("x-headroom-project-id", encodeURIComponent(options.memoryProjectID));
+    routed.headers.set("x-headroom-scope-encoding", "uri-component");
+  }
+  if (options.clientMemoryTools) routed.headers.set("x-headroom-memory-tools", "client");
+  if (options.memoryUnresolved) routed.headers.set("x-headroom-memory-unresolved", "true");
+  return routed;
 }
 
 function splitNodeArgs(args: unknown[]): NodeRequestParts {

@@ -571,3 +571,21 @@ def test_extract_system_prompt_user_cwd_cannot_override_system_field_cwd() -> No
     assert "spoofed" not in prompt
     assert resolved is not None
     assert resolved[1] == "project"
+
+def test_unresolved_native_session_never_uses_stale_root_or_prompt():
+    from headroom.memory.storage_router import ProjectResolver, RequestContext
+    context = RequestContext(headers={"x-headroom-memory-unresolved": "true"},
+        system_prompt="<env>Working directory: /old/project</env>", base_user_id="alice",
+        project_root_override="/stale/app")
+    assert ProjectResolver().resolve(context) is None
+
+
+@pytest.mark.parametrize("project", ["acme/api", "acme%2Fapi", "tiếng Việt/project"])
+def test_native_encoded_project_preserves_canonical_literal_identity(project):
+    from urllib.parse import quote
+    from headroom.memory.storage_router import ProjectResolver, RequestContext
+    resolver = ProjectResolver()
+    legacy = resolver.resolve(RequestContext(headers={"x-headroom-project-id": project}, system_prompt="", base_user_id="alice"))
+    native = resolver.resolve(RequestContext(headers={"x-headroom-project-id": quote(project, safe=""),
+        "x-headroom-scope-encoding": "uri-component"}, system_prompt="", base_user_id="alice"))
+    assert native == legacy

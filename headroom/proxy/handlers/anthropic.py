@@ -2720,7 +2720,7 @@ class AnthropicHandlerMixin:
                                 )
 
             # Traffic Learner: Extract patterns from inbound tool results
-            if self.traffic_learner:
+            if self.traffic_learner and request.headers.get("x-headroom-memory-tools") != "client":
                 try:
                     # Wire backend on first use (lazy init after memory handler is ready)
                     if (
@@ -2856,16 +2856,16 @@ class AnthropicHandlerMixin:
 
                 memory_tool_defs = (
                     self.memory_handler.compute_memory_tool_definitions("anthropic")
-                    if self.memory_handler.config.inject_tools
+                    if self.memory_handler.config.inject_tools and request.headers.get("x-headroom-memory-tools") != "client"
                     else []
                 )
                 tools, mem_tools_injected = apply_session_sticky_memory_tools(
                     provider="anthropic",
-                    session_id=session_id,
+                    session_id=session_id if request.headers.get("x-headroom-memory-tools") != "client" else None,
                     request_id=request_id,
                     existing_tools=tools,
                     memory_tools_to_inject=memory_tool_defs,
-                    inject_this_turn=bool(self.memory_handler.config.inject_tools),
+                    inject_this_turn=bool(self.memory_handler.config.inject_tools and request.headers.get("x-headroom-memory-tools") != "client"),
                     client_declared_tools=bool(_original_tools),
                 )
                 if mem_tools_injected:
@@ -4588,6 +4588,7 @@ class AnthropicHandlerMixin:
                             and resp_json
                             and response.status_code == 200
                             and self.memory_handler.has_memory_tool_calls(resp_json, "anthropic")
+                            and request.headers.get("x-headroom-memory-tools") != "client"
                         ):
                             logger.info(
                                 f"[{request_id}] Memory: Detected memory tool call, handling..."
