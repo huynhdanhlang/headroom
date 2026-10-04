@@ -14,7 +14,7 @@
 
 - Baseline source HEAD: `520ff80992362163ee91da3295ff4a52bcd921c0`; only our untracked specification existed at planning time. Check freshness before edits; preserve all later unrelated work.
 - Native/dependency anchor remains upstream `1cf496612e781ef8d67ff87ee4f78037492f0bc7`, as owned by `FORK.md`. No new runtime/model/embedding dependency or provider substitution.
-- Source work is uncommitted. No commit/push/merge, release-image build from dirty source, service/config activation, video-app restart or creator-project write without the required specific authority.
+- Source implementation and activation required separate specific authority. The owner subsequently authorized local commit/integration, clean release build and Headroom-only activation (recorded below). Push, dirty-source release build, model/Fast changes, video-app restart and creator-project writes remain outside that approval.
 - Use a disposable QA image/state for Python verification. Never mount `/home/huynhdanhlang/Headroom/state` or Engine data into tests. No real upstream inference or telemetry in focused regressions.
 - Preserve cache-hot prefixes, signed reasoning, model/Fast parameters, exact source reads, CCR retrieval, request isolation and accounting.
 - Missing trusted project identity fails closed. Model arguments never select user identity, cwd, project ID or database path.
@@ -160,9 +160,10 @@ New interfaces are defined before their consumers. No task installs a product mo
 - [x] Implementation plan written and self-reviewed against the spec/current source.
 - [x] Owner reviews this written plan — “Ok duyệt” on 2026-10-04. Execution is native/main-agent.
 - [x] Load `executing-plans`, establish workspace isolation at `/tmp/opencode/headroom-feedback-worktree` (branch `fix/feedback-memory`, BASE520ff809), and execute Task 1 onward in dependency order. Private task evidence/rulings are in that worktree's `.superpowers/sdd/2026-10-04-feedback-memory/progress.md`.
-- [ ] Actual memory-path evidence complete; unresolved runtime/activation limits explicitly reported.
+- [x] Tasks 1–8 delivered against the existing owners; detailed task bullets above retain the original execution recipe, not an outstanding-work queue.
+- [x] Actual installed memory path, fresh-session recall, compaction, native guarded update/forget and session-scope move verified. Remaining baseline/semantic limits explicitly reported below.
 
-## Execution checkpoint — 2026-10-04, source only
+## Historical source-qualification checkpoint — 2026-10-04
 
 Implementation was qualified in `/tmp/opencode/headroom-feedback-worktree` on
 `fix/feedback-memory`, BASE`520ff80992362163ee91da3295ff4a52bcd921c0`.
@@ -185,23 +186,23 @@ Three router fixture checks fail identically on untouched baseline
 (`test_responses_unit_and_batch_workers_inherit_context[False/True]` and
 `test_responses_entry_does_not_inherit_previous_apply_options`). Independent
 whole-change review returned six Important findings, all verified RED→GREEN in
-one main-agent fix pass. No clean release or live acceptance claimed.
+one main-agent fix pass. This historical source checkpoint alone made no release/live claim.
 The unexpected pnpm auto-install touched only ignored main-checkout dependencies;
 tracked source was preserved, and candidate verification uses isolated npm-ci
 from the unchanged lockfile. Do not describe that dependency cache as untouched.
 
 Exact logs, decisions, verified restore manifest, source/bundle hashes and proposed
 activation diff are in this Plan's private worktree ledger
-`.superpowers/sdd/2026-10-04-feedback-memory/`. Keep that workspace because commits
-are prohibited and it is the recovery evidence, not a new product authority.
+`.superpowers/sdd/2026-10-04-feedback-memory/`. Keep that workspace and its durable
+backup copy for exact runtime/recovery evidence, not as a new product authority.
 Owner subsequently explicitly selected **Cho phép** for commit/integration,
 clean pinned release build, backup, Headroom update/restart and necessary OpenCode
 plugin reload, followed by actual traffic/native-tool verification. No push,
 model/Fast change, video-app restart or creator-project write authorized.
-Integration/activation is now in progress; no live acceptance claimed until those
-checks finish. Preserve the exact prior image/config/state/cache for rollback.
+Integration/activation subsequently completed at the installed-host checkpoint
+below. Preserve the exact prior image/config/state/cache for rollback.
 
-### Installed-host acceptance checkpoint
+### Installed-host acceptance — complete for the tested flow
 
 Commit `2467011c` was integrated by fast-forward and its clean pinned release
 image passed exact overlay-hash/offline-model checks. Both Headroom services were
@@ -218,5 +219,35 @@ on the missing outgoing reminder; native HTTP/WS now use a read-only text query
 projection and only append background to the latest user item. The WS regression
 also caught its missing array injection. Signed prefix, current instructions,
 priority request and irrelevant-query omission remain covered. The affected run
-passes 95 checks; the new source must be clean-built/re-activated and the actual
-host fixture resumed before claiming useful live acceptance.
+passes 95 checks (171 existing deprecation warnings). Pinned Ruff passes. The fix
+was committed as `c36d0f1acaf882c3d2cbcdc22433d8044579d048`, integrated by clean
+fast-forward, built/check-only from that clean commit and verified against all
+overlay hashes with the qualified model offline before final cutover.
+
+Final image `ai-motion-headroom:0.39.1-amv-c36d0f1a-memory` has exact ID
+`sha256:988cd5f5017495e948df5dcd2c1dbbc11df5dc2f6a60c0dc01e70b194294ff1f`.
+Both Headroom services are healthy on that image. Original and intermediate
+rollback identities, complete stopped snapshots and restore boundaries are in
+`/home/huynhdanhlang/Headroom/backups/feedback-memory-20261004T111822Z/ROLLBACK.md`.
+Runtime metadata matches the final image/commit; live top-k remains 3, and
+OpenCode configuration remains byte-identical. Responses resumed with the actual
+session cwd and client-owned tools. The alias requests Fast, but observed
+responses report `serviceTier=default`; no Fast-processing claim is made.
+
+The final fixture exercised the actual installed OpenCode 2.0.22 host and its
+selected model, with two independent synthetic sessions: authored Vietnamese
+capture preserved exact wording, the fresh session answered from automatic
+background without a memory-tool call, native Code Mode search/list executed,
+manual host compaction completed and recall survived, native ID/hash update
+superseded the saved row, a session move switched inference/tool scope to an
+empty project B, and native forget removed current recall while retaining
+history. Synthetic rules from both the failed and passing acceptance attempts
+were forgotten using exact ID/hash. Creator projects were not used as fixtures.
+
+Evidence: `installed-host-acceptance.json`, `installed-host-journey.log`,
+`liveqa-*.json`, `final-live-runtime.json` and the RED→GREEN/clean-build logs in
+the existing private ledger, with a durable copy in the backup directory.
+There is no required activation work remaining. Limits remain the three named
+unchanged baseline router fixtures, 54 external-fixture skips and unqualified
+arbitrary cross-language paraphrases; successful tested flows are not proof of
+universal semantic quality, model speedup, quota savings or video design acceptance.

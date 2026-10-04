@@ -28,12 +28,21 @@ the qualified ONNX model copied byte-for-byte from the existing cache, offline:
 save/replay, fresh backend, relevant-only background, unchanged signed prefix,
 guarded correction/conflict, session move, project isolation and forget. No model
 was downloaded or substituted. This does not establish arbitrary cross-language
-semantic quality or actual installed-host/live acceptance. Three router fixture
+semantic quality. Actual installed-host acceptance subsequently passed: fresh
+session automatic recall, compaction, native search/list/update/forget and
+session moves on OpenCode 2.0.22 with the selected model. That acceptance exposed
+native array-input recall gaps in HTTP/WS; read-only query projection and latest
+user-tail injection fix them while keeping signed/cache prefixes unchanged.
+The final runtime source is `c36d0f1a`, clean-built on the same pinned base;
+both Headroom services are healthy with actual scope/ownership traffic verified.
+Three router fixture
 checks fail identically on the untouched baseline and remain a verification gap.
 Exact per-slice evidence, review, source/bundle hashes and proposed activation
 boundary are recorded in the approved `2026-10-04-feedback-memory` Plan and its
-private worktree ledger. Clean commit/build, source integration, stopped-service
-backups, activation and actual resumed-traffic checks require separate authority.
+private worktree ledger. Those integration/build/activation actions were separately
+authorized; verified stopped-service backups and original/intermediate rollback
+images are preserved. No push, model/Fast configuration change or video-app
+restart was performed. Live memory top-k remains 3.
 
 Integrated five commits: streamed injected memory-tool execution, context injection
 past trailing system messages, persisted escaped pattern-ID recognition, Hermes
