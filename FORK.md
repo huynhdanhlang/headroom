@@ -33,7 +33,7 @@ session automatic recall, compaction, native search/list/update/forget and
 session moves on OpenCode 2.0.22 with the selected model. That acceptance exposed
 native array-input recall gaps in HTTP/WS; read-only query projection and latest
 user-tail injection fix them while keeping signed/cache prefixes unchanged.
-The final runtime source is `c36d0f1a`, clean-built on the same pinned base;
+The initial delivered runtime source was `c36d0f1a`, clean-built on the same pinned base;
 both Headroom services are healthy with actual scope/ownership traffic verified.
 The subsequent authorized follow-up closes the three baseline router-fixture
 failures by injecting the existing deterministic token counter into their
@@ -44,7 +44,13 @@ silently skip. The exposed legacy missing-ID supersession message is restored
 only for unguarded calls; partial guards still return uniform conflicts.
 Default/access timestamps retain naive UTC without deprecated `utcnow`.
 Final affected suites: 568 passed, zero skips; pinned runtime-source Ruff passed.
-This follow-up's release/live acceptance is recorded separately in the Plan.
+The follow-up runtime `d009303e` was then clean-built on the same pinned base,
+with all 22 overlay hashes verified. Its compiled native hooks/real offline-model
+journey and live synthetic native operations passed. Both Headroom services are
+healthy; ordinary creator-session traffic resumed with the correct client-owned
+scope. Consistent stopped-state rollback is preserved; model/Fast configuration,
+top-k 3 and the video runtime remain unchanged. Exact release/live acceptance is
+recorded separately in the Plan.
 Exact per-slice evidence, review, source/bundle hashes and proposed activation
 boundary are recorded in the approved `2026-10-04-feedback-memory` Plan and its
 private worktree ledger. Those integration/build/activation actions were separately

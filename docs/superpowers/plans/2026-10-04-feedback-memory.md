@@ -301,10 +301,10 @@ hnswlib/torch/model downloads are absent.
 - [x] If recall quality exposes a reproducible defect, add a synthetic regression
   at the existing retrieval owner. Do not promise universal semantic accuracy or
   silently swap the qualified embedding model.
-- [ ] Review/commit/integrate the bounded fixes. If runtime changes, clean-build,
+- [x] Review/commit/integrate the bounded fixes. If runtime changes, clean-build,
   back up and activate under the existing authorization, then verify resumed
   traffic. If only fixtures change, do not restart a healthy runtime needlessly.
-- [ ] Update this checkpoint and preserve exact evidence/limits in the existing
+- [x] Update this checkpoint and preserve exact evidence/limits in the existing
   backup; distinguish test setup, product bugs and unavailable host diagnostics.
 
 ### Follow-up source evidence (before activation)
@@ -331,3 +331,32 @@ hnswlib/torch/model downloads are absent.
 - Experimental OpenCode stats returned 500 and broad CLI message output truncated;
   use bounded projected traffic/counters instead, not unrelated host repairs.
   Keep universal cross-language semantic quality explicitly unqualified.
+
+### Follow-up release/live acceptance — completed
+
+- Runtime commit `d009303e5be0cb1ae24273366b7305858d023552` integrated by clean
+  local fast-forward, no push. Clean `--check-only` and release build passed;
+  image `ai-motion-headroom:0.39.1-amv-d009303e-memory`, ID
+  `sha256:f7f407198254f6de6d3194f7e55c32dc34a34fefb9bf74b405fe2103d7478f15`.
+  All 22 committed runtime overlay hashes match actual image bytes.
+- Exact release image (no source overlays, isolated state/port, qualified offline
+  ONNX): compiled native hooks → real HTTP → canonical backend journey passed,
+  including fresh-backend relevant-only recall, unchanged signed prefix,
+  guarded correction/conflict, scope/move and forget.
+- Current service cutover preserved previous image `c36d0f1a` and consistent
+  stopped state/cache/config/anonymous-volume snapshots under
+  `~/Headroom/backups/feedback-memory-20261004T111822Z/cutover-d009303e/`.
+  Both Headroom services healthy, same mounts/security/workers/top-k 3.
+- New live synthetic scope: exact Vietnamese native prompt capture and replay,
+  search, guarded update/stale conflict, second-project isolation and retained
+  forget all passed; final active synthetic recall empty. No creator writes.
+- `followup-final-live-runtime.json`: 21 post-restart scoped native Responses,
+  including nine creator-project requests; existing creator session still running.
+  Unscoped requests excluded from positive native acceptance; memory injection
+  is skipped for unresolved scope rather than guessing another project.
+  Installation image/compose checksum match; OpenCode config byte-identical.
+- Evidence/recipes and ledger preserved privately with this rollback snapshot;
+  worktree retained. Unchanged installed-host fresh-session/compaction acceptance
+  remains above; this follow-up does not claim a repeat of those unchanged checks.
+  No dependency/model/Fast change or video-app restart. Universal cross-language
+  paraphrase quality remains a model limitation, not an unverified code fix.
