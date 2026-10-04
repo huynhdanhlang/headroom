@@ -26,8 +26,23 @@ roots retain their startup project until a fresh MCP session is created.
 Register the launcher as `mcp_servers.headroom_memory` in Codex's config with
 `command = "/usr/bin/python3"` and args `[absolute_launcher_path, "--image",
 "sha256:<installed-clean-image-id>"]`; the local proxy defaults to port 4444.
+The user-authorized memory server alone uses `default_tools_approval_mode =
+"approve"` (Codex 0.160.0); `auto` still requires prompts on this host and
+`approval_policy=never` then refuses the calls. Other MCP/shell approval policy
+is unchanged. The stdio container disables the inherited proxy-only HTTP
+healthcheck; its acceptance is the MCP handshake and real operation receipts.
 Existing local-DB `headroom.memory.mcp_server` compatibility stays unchanged.
 The proxy and CCR do not require a restart for this client-only adapter.
+Installed acceptance passed save/list, fresh-session recall without the canary
+in its prompt, other-project isolation, guarded update and retained forget,
+plus a fresh Codex run using the actual global MCP config and installed launcher.
+Receipts and pre-change config/instructions are preserved under the installation's
+`backups/20261005-codex-memory.HrkAED/`. Recalled knowledge is scoped background,
+not instruction authority; no guarantee of perfect recall or faster model inference.
+Qualification: 183 focused checks passed. Full-suite collection encountered the
+pre-existing dashboard Playwright `_open_dashboard` import failure; full suite
+is not claimed green. Existing proxy/CCR runtime and worker/model/context/cache
+settings are unchanged.
 
 ## Synchronization through 1cf49661 (2026-10-04)
 

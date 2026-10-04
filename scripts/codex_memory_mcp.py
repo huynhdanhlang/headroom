@@ -17,7 +17,7 @@ def docker_command(image: str, proxy_url: str, project: Path) -> list[str]:
     project = project.resolve()
     if project == Path("/") or not project.is_dir():
         raise ValueError("Trusted existing project cwd required")
-    return ["/usr/bin/docker", "run", "--rm", "-i", "--network", "host", "--read-only",
+    return ["/usr/bin/docker", "run", "--rm", "-i", "--network", "host", "--read-only", "--no-healthcheck",
             "--user", f"{os.getuid()}:{os.getgid()}", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m",
             "--label", "headroom.component=codex-memory-mcp", "-e", "PYTHONDONTWRITEBYTECODE=1",

@@ -139,6 +139,8 @@ def test_host_launcher_forwards_actual_session_cwd_without_project_or_secret_mou
     command = docker_command("sha256:" + "a" * 64, "http://127.0.0.1:4444", tmp_path)
     assert command[-2:] == ["--project-root", str(tmp_path)]
     assert "--read-only" in command and "-i" in command and "-t" not in command
+    # This process serves stdio, not the base image's proxy HTTP health endpoint.
+    assert "--no-healthcheck" in command
     assert "--volume" not in command and "-v" not in command and "--mount" not in command
     assert command[command.index("--cap-drop") + 1] == "ALL"
     with pytest.raises(ValueError):
