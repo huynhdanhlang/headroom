@@ -1,12 +1,29 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `befdb52fd565ff990e4ff1463f0550ba7df588b5` (0.39.1 plus upstream main fixes).
-Native/dependency anchor remains `1cf496612e781ef8d67ff87ee4f78037492f0bc7`.
+Integrated upstream source and native/dependency anchor: `2651489745937e1479af3e92151f0f811ccfafda` (0.39.1 plus upstream main fixes).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37154398685's `digests-code-amd64` artifact (the per-platform smoke test passed):
-`ghcr.io/headroomlabs-ai/headroom:code-1cf4966@sha256:927b633cb93324aad209219f216df9d66e9b28816050a97362c5e196fe6a7261`.
+37333428677's `digests-code-amd64` artifact (the Docker and Rust runs passed):
+`ghcr.io/headroomlabs-ai/headroom:code-2651489@sha256:cb5005550e6464114185a0d86e409c8291f6ab94685dda5c4171de0be35ee695`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 26514897 (2026-10-06)
+
+Integrated 24 commits, including Rust dependency updates, shared Responses
+compression deadlines, latest-user preservation, SSE safeguards, same-origin
+retrieval checks, authenticated rate identities, startup bind policy, pinned
+ModernBERT loading and client/installer fixes. Rust/dependency changes come from
+the exact matching upstream native image, not Python overlays. The optional
+densify mode is included but not enabled for existing clients.
+Resolved four overlaps by retaining the fork's ContextVar owner/restoration and
+worker propagation, adapting only the shared-deadline entry point, keeping the
+upstream plugin-root hook launcher, and updating the isolated accounting fixture
+to the new shared rate-identity seam. Regression checks cover deadline expiry,
+protected request state and caller restoration. Model, context, existing memory,
+cache policy, read protection, worker limits and subscription tracking stay as
+configured. Docker remains host-loopback-only; the upstream bind acknowledgement
+is required for that already-existing container networking shape.
+Deployment/qualification receipts are kept separately from source integration.
 
 ## Python-only synchronization through befdb52f (2026-10-05)
 

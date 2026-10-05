@@ -1,52 +1,30 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-1cf4966@sha256:927b633cb93324aad209219f216df9d66e9b28816050a97362c5e196fe6a7261
+FROM ghcr.io/headroomlabs-ai/headroom:code-2651489@sha256:cb5005550e6464114185a0d86e409c8291f6ab94685dda5c4171de0be35ee695
 ARG FORK_COMMIT
 USER root
-COPY headroom/agent_savings.py /usr/local/lib/python3.13/site-packages/headroom/agent_savings.py
-COPY headroom/backends/litellm.py /usr/local/lib/python3.13/site-packages/headroom/backends/litellm.py
-COPY headroom/cache/prefix_tracker.py /usr/local/lib/python3.13/site-packages/headroom/cache/prefix_tracker.py
-COPY headroom/ccr/context_tracker.py /usr/local/lib/python3.13/site-packages/headroom/ccr/context_tracker.py
-COPY headroom/cli/learn.py /usr/local/lib/python3.13/site-packages/headroom/cli/learn.py
-COPY headroom/cli/proxy.py /usr/local/lib/python3.13/site-packages/headroom/cli/proxy.py
-COPY headroom/cli/wrap.py /usr/local/lib/python3.13/site-packages/headroom/cli/wrap.py
-COPY headroom/image/compressor.py /usr/local/lib/python3.13/site-packages/headroom/image/compressor.py
-COPY headroom/image/image_types.py /usr/local/lib/python3.13/site-packages/headroom/image/image_types.py
-COPY headroom/image/onnx_router.py /usr/local/lib/python3.13/site-packages/headroom/image/onnx_router.py
-COPY headroom/learn/analyzer.py /usr/local/lib/python3.13/site-packages/headroom/learn/analyzer.py
-COPY headroom/parser.py /usr/local/lib/python3.13/site-packages/headroom/parser.py
-COPY headroom/providers/route_specs.py /usr/local/lib/python3.13/site-packages/headroom/providers/route_specs.py
-COPY headroom/providers/wrap_registry.py /usr/local/lib/python3.13/site-packages/headroom/providers/wrap_registry.py
-COPY headroom/proxy/gateway_turn.py /usr/local/lib/python3.13/site-packages/headroom/proxy/gateway_turn.py
-COPY headroom/proxy/helpers.py /usr/local/lib/python3.13/site-packages/headroom/proxy/helpers.py
-COPY headroom/proxy/image_isolation.py /usr/local/lib/python3.13/site-packages/headroom/proxy/image_isolation.py
-COPY headroom/proxy/models.py /usr/local/lib/python3.13/site-packages/headroom/proxy/models.py
-COPY headroom/proxy/semantic_cache.py /usr/local/lib/python3.13/site-packages/headroom/proxy/semantic_cache.py
-COPY headroom/tokenizers/base.py /usr/local/lib/python3.13/site-packages/headroom/tokenizers/base.py
-COPY headroom/tokenizers/huggingface.py /usr/local/lib/python3.13/site-packages/headroom/tokenizers/huggingface.py
-COPY headroom/utils.py /usr/local/lib/python3.13/site-packages/headroom/utils.py
+COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
+COPY headroom/memory/adapters/sqlite.py /usr/local/lib/python3.13/site-packages/headroom/memory/adapters/sqlite.py
+COPY headroom/memory/backends/local.py /usr/local/lib/python3.13/site-packages/headroom/memory/backends/local.py
+COPY headroom/memory/core.py /usr/local/lib/python3.13/site-packages/headroom/memory/core.py
+COPY headroom/memory/models.py /usr/local/lib/python3.13/site-packages/headroom/memory/models.py
+COPY headroom/memory/ports.py /usr/local/lib/python3.13/site-packages/headroom/memory/ports.py
+COPY headroom/memory/proxy_mcp.py /usr/local/lib/python3.13/site-packages/headroom/memory/proxy_mcp.py
+COPY headroom/memory/storage_router.py /usr/local/lib/python3.13/site-packages/headroom/memory/storage_router.py
+COPY headroom/memory/traffic_learner.py /usr/local/lib/python3.13/site-packages/headroom/memory/traffic_learner.py
 COPY headroom/providers/opencode/_dist/entry.opencode.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.js
 COPY headroom/providers/opencode/_dist/entry.opencode.v2.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.v2.js
 COPY headroom/providers/opencode/_dist/v2/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/index.js
 COPY headroom/providers/opencode/_dist/v2/package.json /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/package.json
-COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
-COPY headroom/proxy/handlers/anthropic.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/anthropic.py
 COPY headroom/proxy/gateway_responses.py /usr/local/lib/python3.13/site-packages/headroom/proxy/gateway_responses.py
-COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
+COPY headroom/proxy/handlers/anthropic.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/anthropic.py
+COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
+COPY headroom/proxy/handlers/streaming.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/streaming.py
 COPY headroom/proxy/memory_commands.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_commands.py
 COPY headroom/proxy/memory_handler.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_handler.py
-COPY headroom/memory/models.py /usr/local/lib/python3.13/site-packages/headroom/memory/models.py
-COPY headroom/memory/ports.py /usr/local/lib/python3.13/site-packages/headroom/memory/ports.py
-COPY headroom/memory/core.py /usr/local/lib/python3.13/site-packages/headroom/memory/core.py
-COPY headroom/memory/adapters/sqlite.py /usr/local/lib/python3.13/site-packages/headroom/memory/adapters/sqlite.py
-COPY headroom/memory/backends/local.py /usr/local/lib/python3.13/site-packages/headroom/memory/backends/local.py
-COPY headroom/memory/traffic_learner.py /usr/local/lib/python3.13/site-packages/headroom/memory/traffic_learner.py
-COPY headroom/memory/storage_router.py /usr/local/lib/python3.13/site-packages/headroom/memory/storage_router.py
-COPY headroom/memory/proxy_mcp.py /usr/local/lib/python3.13/site-packages/headroom/memory/proxy_mcp.py
-COPY headroom/proxy/handlers/streaming.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/streaming.py
 COPY headroom/proxy/memory_tool_stream.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_tool_stream.py
 COPY headroom/proxy/savings_tracker.py /usr/local/lib/python3.13/site-packages/headroom/proxy/savings_tracker.py
+COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
 COPY headroom/transforms/content_router.py /usr/local/lib/python3.13/site-packages/headroom/transforms/content_router.py
-COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
 RUN python -c 'import os,re,sys; from pathlib import Path; revision=os.environ.get("FORK_COMMIT",""); re.fullmatch(r"[a-f0-9]{40}",revision) or sys.exit("FORK_COMMIT must identify the exact clean fork commit"); version="0.39.1+amv."+revision[:12]; Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = "+repr(version)+"\n")'
 LABEL org.opencontainers.image.source="https://github.com/huynhdanhlang/headroom"
 LABEL org.opencontainers.image.revision="${FORK_COMMIT}"

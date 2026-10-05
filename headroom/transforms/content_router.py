@@ -2407,6 +2407,18 @@ class ContentRouter(Transform):
         self._freeze_pin_hits = 0
         self._freeze_pin_chars = 0
 
+    def share_request_deadline(self, started_at: float) -> bool:
+        """Join a Responses deadline without replacing protected request state.
+
+        Worker tasks use copied contexts; the existing request scope restores
+        this option on completion just like the other routing options.
+        """
+        deadline_s = _compression_deadline_seconds()
+        if deadline_s and time.perf_counter() - started_at > deadline_s:
+            return False
+        self._runtime_kompress_deadline_started_at = started_at
+        return True
+
     def _record_freeze_pin(self, content: str, cached_ratio: float) -> None:
         """Count one freeze divergence (thread-safe) and log it.
 
