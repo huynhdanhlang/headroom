@@ -1,11 +1,27 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `1cf496612e781ef8d67ff87ee4f78037492f0bc7` (0.39.1 plus latest upstream main fixes).
+Integrated upstream source: `befdb52fd565ff990e4ff1463f0550ba7df588b5` (0.39.1 plus upstream main fixes).
+Native/dependency anchor remains `1cf496612e781ef8d67ff87ee4f78037492f0bc7`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
 37154398685's `digests-code-amd64` artifact (the per-platform smoke test passed):
 `ghcr.io/headroomlabs-ai/headroom:code-1cf4966@sha256:927b633cb93324aad209219f216df9d66e9b28816050a97362c5e196fe6a7261`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Python-only synchronization through befdb52f (2026-10-05)
+
+Integrated 17 upstream commits without merge conflicts. They reduce request-path
+copying, preserve token-cache hits, offload bounded decompression, memoize image
+analysis, retain cache-prefix lineage, scope proactive CCR expansion to markers
+present in the requesting conversation, avoid caching error replies, and correct
+gateway/Anthropic usage accounting. CLI/error/offline-tokenizer fixes are included.
+No native or dependency input changes: every changed runtime file is explicitly
+copied onto the existing immutable native base. The fork's request isolation,
+cache-mode Responses prefix/source-read protection, bounded deadlines, OpenCode V2
+and guarded shared-memory adapters remain. Model, context, tokenizer cache,
+worker/security settings and existing memory stores are not replaced.
+Qualification and actual activation receipts are recorded separately; source
+integration alone does not establish live installation or faster model inference.
 
 ## Codex client-owned proxy memory (2026-10-05)
 

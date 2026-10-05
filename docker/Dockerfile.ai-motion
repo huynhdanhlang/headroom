@@ -2,6 +2,28 @@
 FROM ghcr.io/headroomlabs-ai/headroom:code-1cf4966@sha256:927b633cb93324aad209219f216df9d66e9b28816050a97362c5e196fe6a7261
 ARG FORK_COMMIT
 USER root
+COPY headroom/agent_savings.py /usr/local/lib/python3.13/site-packages/headroom/agent_savings.py
+COPY headroom/backends/litellm.py /usr/local/lib/python3.13/site-packages/headroom/backends/litellm.py
+COPY headroom/cache/prefix_tracker.py /usr/local/lib/python3.13/site-packages/headroom/cache/prefix_tracker.py
+COPY headroom/ccr/context_tracker.py /usr/local/lib/python3.13/site-packages/headroom/ccr/context_tracker.py
+COPY headroom/cli/learn.py /usr/local/lib/python3.13/site-packages/headroom/cli/learn.py
+COPY headroom/cli/proxy.py /usr/local/lib/python3.13/site-packages/headroom/cli/proxy.py
+COPY headroom/cli/wrap.py /usr/local/lib/python3.13/site-packages/headroom/cli/wrap.py
+COPY headroom/image/compressor.py /usr/local/lib/python3.13/site-packages/headroom/image/compressor.py
+COPY headroom/image/image_types.py /usr/local/lib/python3.13/site-packages/headroom/image/image_types.py
+COPY headroom/image/onnx_router.py /usr/local/lib/python3.13/site-packages/headroom/image/onnx_router.py
+COPY headroom/learn/analyzer.py /usr/local/lib/python3.13/site-packages/headroom/learn/analyzer.py
+COPY headroom/parser.py /usr/local/lib/python3.13/site-packages/headroom/parser.py
+COPY headroom/providers/route_specs.py /usr/local/lib/python3.13/site-packages/headroom/providers/route_specs.py
+COPY headroom/providers/wrap_registry.py /usr/local/lib/python3.13/site-packages/headroom/providers/wrap_registry.py
+COPY headroom/proxy/gateway_turn.py /usr/local/lib/python3.13/site-packages/headroom/proxy/gateway_turn.py
+COPY headroom/proxy/helpers.py /usr/local/lib/python3.13/site-packages/headroom/proxy/helpers.py
+COPY headroom/proxy/image_isolation.py /usr/local/lib/python3.13/site-packages/headroom/proxy/image_isolation.py
+COPY headroom/proxy/models.py /usr/local/lib/python3.13/site-packages/headroom/proxy/models.py
+COPY headroom/proxy/semantic_cache.py /usr/local/lib/python3.13/site-packages/headroom/proxy/semantic_cache.py
+COPY headroom/tokenizers/base.py /usr/local/lib/python3.13/site-packages/headroom/tokenizers/base.py
+COPY headroom/tokenizers/huggingface.py /usr/local/lib/python3.13/site-packages/headroom/tokenizers/huggingface.py
+COPY headroom/utils.py /usr/local/lib/python3.13/site-packages/headroom/utils.py
 COPY headroom/providers/opencode/_dist/entry.opencode.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.js
 COPY headroom/providers/opencode/_dist/entry.opencode.v2.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.v2.js
 COPY headroom/providers/opencode/_dist/v2/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/index.js
