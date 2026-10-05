@@ -23,6 +23,10 @@ protected request state and caller restoration. Model, context, existing memory,
 cache policy, read protection, worker limits and subscription tracking stay as
 configured. Docker remains host-loopback-only; the upstream bind acknowledgement
 is required for that already-existing container networking shape.
+The installed CCR sidecar shares the proxy network namespace and uses
+`http://127.0.0.1:8787`: the previous bridge peer/`Host: proxy` shape cannot
+pass the existing strict retrieval loopback gate. Both published host ports
+remain bound only to `127.0.0.1`; the retrieval gate is not weakened.
 Deployment/qualification receipts are kept separately from source integration.
 
 ## Python-only synchronization through befdb52f (2026-10-05)
