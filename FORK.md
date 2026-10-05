@@ -20,6 +20,11 @@ copied onto the existing immutable native base. The fork's request isolation,
 cache-mode Responses prefix/source-read protection, bounded deadlines, OpenCode V2
 and guarded shared-memory adapters remain. Model, context, tokenizer cache,
 worker/security settings and existing memory stores are not replaced.
+The conflict-free merge still overlapped streamed Anthropic continuation
+accounting: the new uncached-input branch consumed the fork's whole-prompt
+total. The existing two-round memory regression failed (135 versus 30 uncached
+tokens); retaining raw provider input separately fixes it without changing
+whole-prompt totals or the client stream. The affected checks passed after repair.
 Qualification and actual activation receipts are recorded separately; source
 integration alone does not establish live installation or faster model inference.
 
