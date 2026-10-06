@@ -2321,6 +2321,13 @@ _EGRESS_ALLOWLIST: dict[str, tuple[int, str]] = {
         "proxy_url (defaults to 127.0.0.1). The MCP server is a sidecar to the "
         "proxy, not an internet client.",
     ),
+    "memory/proxy_mcp.py": (
+        1,
+        "loopback: the client-owned memory adapter validates a loopback-only "
+        "proxy URL (127.0.0.1, localhost or ::1) before any request. Remote hosts, credentials, "
+        "query strings and fragments are rejected; trust_env and redirects "
+        "are disabled. It contacts only the local canonical memory owner.",
+    ),
     "memory/adapters/embedders.py": (
         1,
         "operator-endpoint: OllamaEmbedder against the base_url the operator "
