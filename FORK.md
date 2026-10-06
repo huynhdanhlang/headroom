@@ -21,6 +21,11 @@ ContextVar scope, shared deadlines, cached-prefix/source-read protection, exact
 retrieval, native OpenCode V2 and memory ownership remain. Existing model, context,
 worker, cache and loopback deployment settings are not replaced. Activation and
 qualification receipts are recorded separately; no inference speedup is implied.
+Known upstream limitation: cold LiteLLM pricing imports can fetch the remote price
+map with `HEADROOM_OFFLINE=1` before Headroom's guards. Two isolated socket-trap
+checks reproduce this; default startup also imports pricing. This installation
+does not enable `HEADROOM_OFFLINE`; cached-model offline loading is verified
+separately and is not proof of whole-proxy air-gap operation.
 
 ## Synchronization through 26514897 (2026-10-06)
 
