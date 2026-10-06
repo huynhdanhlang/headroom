@@ -6131,11 +6131,6 @@ class OpenAIHandlerMixin:
         bind_scope(tags, request.scope)
         client = classify_client(headers)
 
-        # Learn from the original client payload before memory context or
-        # compression mutates it. This mirrors the Anthropic ingestion path.
-        if request.headers.get("x-headroom-memory-tools") != "client":
-            await self._observe_openai_responses_traffic(body, request_id=request_id)
-
         # PR-A5 (P5-49): strip internal x-headroom-* from upstream-bound
         # headers AFTER `_extract_tags` reads them. Memory user-id reads
         # `request.headers` below.
@@ -6230,8 +6225,10 @@ class OpenAIHandlerMixin:
         )
         # The shared learner cannot isolate project state. Scoped Codex turns
         # skip learning until a project-scoped learner is available.
-        if not codex_project_scope_required and (
-            codex_project is None or codex_project.reason == "metadata_missing"
+        if (
+            request.headers.get("x-headroom-memory-tools") != "client"
+            and not codex_project_scope_required
+            and (codex_project is None or codex_project.reason == "metadata_missing")
         ):
             await self._observe_openai_responses_traffic(body, request_id=request_id)
         memory_client = (

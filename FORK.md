@@ -14,7 +14,9 @@ cache partitioning, private state-file creation, offline egress checks, retrieva
 wrapper exemptions, bounded upstream-error redaction, Gemini transforms and the
 0.40.0 release. Native/dependency changes come from the exact upstream code image.
 Resolved two conflicts by combining owner-only SQLite connections with guarded
-memory conflicts and retaining original client-traffic observation. The fork's
+memory conflicts and combining the scoped Codex learner gate with client-owned
+memory exclusion at a single observation site. Three failing regressions exposed
+the early unscoped/duplicate observation before this adaptation. The fork's
 ContextVar scope, shared deadlines, cached-prefix/source-read protection, exact
 retrieval, native OpenCode V2 and memory ownership remain. Existing model, context,
 worker, cache and loopback deployment settings are not replaced. Activation and

@@ -504,6 +504,31 @@ def test_http_resolution_does_not_mutate_body_or_forward_internal_metadata(
     assert unresolved_handler.observed == []
 
 
+@pytest.mark.parametrize("client_owned_memory, expected_observations", [(False, 1), (True, 0)])
+def test_http_legacy_learning_is_once_and_respects_client_owned_memory(
+    monkeypatch, client_owned_memory, expected_observations
+) -> None:
+    class Handler(_HTTPHandler):
+        def __init__(self):
+            super().__init__()
+            self.observed = []
+
+        async def _observe_openai_responses_traffic(self, body, *, request_id):
+            self.observed.append(body["input"])
+
+    monkeypatch.setattr("headroom.tokenizers.get_tokenizer", lambda model: _DummyTokenizer())
+    headers = {"Authorization": "Bearer test", "X-Client": "opencode"}
+    if client_owned_memory:
+        headers["X-Headroom-Memory-Tools"] = "client"
+    handler = Handler()
+    response = anyio.run(
+        handler.handle_openai_responses,
+        _build_request({"model": "gpt-5.4", "input": "synthetic feedback"}, headers),
+    )
+    assert response.status_code == 200
+    assert handler.observed == ["synthetic feedback"] * expected_observations
+
+
 @pytest.mark.asyncio
 async def test_http_project_resolution_does_not_block_event_loop(monkeypatch) -> None:
     resolver_entered = threading.Event()
