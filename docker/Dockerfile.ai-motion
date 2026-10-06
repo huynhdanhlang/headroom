@@ -1,5 +1,5 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-2651489@sha256:cb5005550e6464114185a0d86e409c8291f6ab94685dda5c4171de0be35ee695
+FROM ghcr.io/headroomlabs-ai/headroom:code-0.40.0@sha256:8c02592dd0348a78114d824d19490f9032e39eed780fce7eb69e2c02784198a1
 ARG FORK_COMMIT
 USER root
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
@@ -25,7 +25,7 @@ COPY headroom/proxy/memory_tool_stream.py /usr/local/lib/python3.13/site-package
 COPY headroom/proxy/savings_tracker.py /usr/local/lib/python3.13/site-packages/headroom/proxy/savings_tracker.py
 COPY headroom/proxy/server.py /usr/local/lib/python3.13/site-packages/headroom/proxy/server.py
 COPY headroom/transforms/content_router.py /usr/local/lib/python3.13/site-packages/headroom/transforms/content_router.py
-RUN python -c 'import os,re,sys; from pathlib import Path; revision=os.environ.get("FORK_COMMIT",""); re.fullmatch(r"[a-f0-9]{40}",revision) or sys.exit("FORK_COMMIT must identify the exact clean fork commit"); version="0.39.1+amv."+revision[:12]; Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = "+repr(version)+"\n")'
+RUN python -c 'import os,re,sys; from pathlib import Path; revision=os.environ.get("FORK_COMMIT",""); re.fullmatch(r"[a-f0-9]{40}",revision) or sys.exit("FORK_COMMIT must identify the exact clean fork commit"); version="0.40.0+amv."+revision[:12]; Path("/usr/local/lib/python3.13/site-packages/headroom/_build_info.py").write_text("BUILD_VERSION = "+repr(version)+"\n")'
 LABEL org.opencontainers.image.source="https://github.com/huynhdanhlang/headroom"
 LABEL org.opencontainers.image.revision="${FORK_COMMIT}"
 LABEL ai-motion-video.headroom.source="${FORK_COMMIT}"

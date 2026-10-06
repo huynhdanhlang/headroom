@@ -1,11 +1,24 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `2651489745937e1479af3e92151f0f811ccfafda` (0.39.1 plus upstream main fixes).
+Integrated upstream source and native/dependency anchor: `855390d6110e0bbb199d9b97025baac16c2f5cf3` (0.40.0).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37333428677's `digests-code-amd64` artifact (the Docker and Rust runs passed):
-`ghcr.io/headroomlabs-ai/headroom:code-2651489@sha256:cb5005550e6464114185a0d86e409c8291f6ab94685dda5c4171de0be35ee695`.
+37407438427's `digests-code-amd64` artifact (the Docker and Rust runs passed):
+`ghcr.io/headroomlabs-ai/headroom:code-0.40.0@sha256:8c02592dd0348a78114d824d19490f9032e39eed780fce7eb69e2c02784198a1`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 855390d6 (0.40.0, 2026-10-06)
+
+Integrated 18 commits, including per-turn Codex project context, credential/principal
+cache partitioning, private state-file creation, offline egress checks, retrieval
+wrapper exemptions, bounded upstream-error redaction, Gemini transforms and the
+0.40.0 release. Native/dependency changes come from the exact upstream code image.
+Resolved two conflicts by combining owner-only SQLite connections with guarded
+memory conflicts and retaining original client-traffic observation. The fork's
+ContextVar scope, shared deadlines, cached-prefix/source-read protection, exact
+retrieval, native OpenCode V2 and memory ownership remain. Existing model, context,
+worker, cache and loopback deployment settings are not replaced. Activation and
+qualification receipts are recorded separately; no inference speedup is implied.
 
 ## Synchronization through 26514897 (2026-10-06)
 
@@ -283,7 +296,7 @@ python scripts/build_ai_motion.py --check-only
 python scripts/build_ai_motion.py
 ```
 
-The runtime reports `0.39.1+amv.<commit>` and OCI labels identify the full fork commit.
+The runtime reports `0.40.0+amv.<commit>` and OCI labels identify the full fork commit.
 The image preserves the AI Motion manager entrypoint (`headroom`) so one image can run
 both `proxy` and `mcp serve`. Direct use must include the subcommand, for example
 `docker run --rm IMAGE proxy --port 8787`; upstream examples that append only `--port`
