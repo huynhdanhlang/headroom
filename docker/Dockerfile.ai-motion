@@ -1,5 +1,5 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-0.40.0@sha256:8c02592dd0348a78114d824d19490f9032e39eed780fce7eb69e2c02784198a1
+FROM ghcr.io/headroomlabs-ai/headroom:code-3c418f6@sha256:ae14115e8e9c2638c6511f818279fdc461c7261f41bdee4395753ae0dbe6866a
 ARG FORK_COMMIT
 USER root
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
@@ -11,7 +11,8 @@ COPY headroom/memory/ports.py /usr/local/lib/python3.13/site-packages/headroom/m
 COPY headroom/memory/proxy_mcp.py /usr/local/lib/python3.13/site-packages/headroom/memory/proxy_mcp.py
 COPY headroom/memory/storage_router.py /usr/local/lib/python3.13/site-packages/headroom/memory/storage_router.py
 COPY headroom/memory/traffic_learner.py /usr/local/lib/python3.13/site-packages/headroom/memory/traffic_learner.py
-COPY headroom/providers/opencode/_dist/entry.opencode.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.js
+COPY headroom/providers/opencode/_dist/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/index.js
+COPY headroom/providers/opencode/_dist/hook-shim/handler.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/hook-shim/handler.js
 COPY headroom/providers/opencode/_dist/entry.opencode.v2.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.v2.js
 COPY headroom/providers/opencode/_dist/v2/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/index.js
 COPY headroom/providers/opencode/_dist/v2/package.json /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/package.json

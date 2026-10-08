@@ -1,11 +1,26 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `855390d6110e0bbb199d9b97025baac16c2f5cf3` (0.40.0).
+Integrated upstream source and native/dependency anchor: `3c418f6f0b190ad1060413c0eadd77f20ab3cf46` (0.40.0).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37407438427's `digests-code-amd64` artifact (the Docker and Rust runs passed):
-`ghcr.io/headroomlabs-ai/headroom:code-0.40.0@sha256:8c02592dd0348a78114d824d19490f9032e39eed780fce7eb69e2c02784198a1`.
+37716210892's `digests-code-amd64` artifact (Docker and Rust run 37744868370 passed):
+`ghcr.io/headroomlabs-ai/headroom:code-3c418f6@sha256:ae14115e8e9c2638c6511f818279fdc461c7261f41bdee4395753ae0dbe6866a`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 3c418f6f (2026-10-08)
+
+Integrated 32 upstream commits: bounded ML work, context/compaction guard,
+cache-prefix lifetime and reply/read-maturation stability, exact recovery output,
+native git-status preservation, OpenCode dual-loader routing, TLS configuration
+and dependency security updates. Native changes use the matching immutable CI base.
+The ML budget uses the existing fork request-scope owner, with shared locked
+accounting across copied worker contexts and restoration on request exit.
+The default OpenCode dual entry composes the fork native V2 adapter so guarded
+memory/session HTTP hooks survive, retaining the exact 2.0.22 dependency pin.
+Bundles are regenerated from source. Cached-prefix/source-read protections,
+exact retrieval, client-owned memory and uncached continuation accounting remain.
+Model/context/cache/worker settings are unchanged. Runtime receipts are separate;
+no provider inference speedup or subscription-quota saving is implied.
 
 ## Synchronization through 855390d6 (0.40.0, 2026-10-06)
 

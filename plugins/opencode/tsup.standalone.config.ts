@@ -7,10 +7,13 @@ import { buildV2Entry } from "./scripts/build-v2-entry.mjs";
 // with node_modules present; pip installs have no node_modules, so this
 // variant bundles every dependency into a single loadable file.
 export default defineConfig({
+  // The entry is emitted as `index.js` because OpenCode 2.x only loads a local
+  // plugin from a directory, resolving `<dir>/server.*` then `<dir>/index.*`;
+  // 1.x resolves a package-less directory to its `index.*` too.
   // `hook-shim/handler` is the self-contained Node `--import` loader shipped
   // alongside the entry so spawned Node children route their traffic too (#2850).
   entry: {
-    "entry.opencode": "src/entry.opencode.ts",
+    index: "src/entry.opencode.ts",
     "entry.opencode.v2": "src/entry.opencode.v2.ts",
     "hook-shim/handler": "src/hook-shim.ts",
   },

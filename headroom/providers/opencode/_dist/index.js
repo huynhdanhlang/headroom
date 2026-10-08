@@ -6941,8 +6941,8 @@ var parsedTypeFromType = (t, data = void 0) => {
   }
   return t;
 };
-var capitalizeFirstCharacter = (text) => {
-  return text.charAt(0).toUpperCase() + text.slice(1);
+var capitalizeFirstCharacter = (text2) => {
+  return text2.charAt(0).toUpperCase() + text2.slice(1);
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
@@ -12436,8 +12436,13 @@ function resolveProxyUrl(options) {
 }
 
 // src/retrieve.ts
+function trimTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end--;
+  return value.slice(0, end);
+}
 function createHeadroomRetrieveTool(config2) {
-  const origin = config2.proxyBaseUrl.replace(/\/+$/, "");
+  const origin = trimTrailingSlashes(config2.proxyBaseUrl);
   return {
     name: "headroom_retrieve",
     description: "Retrieve original uncompressed content from Headroom's compression store. Use when compressed context mentions a hash and you need the full details. Pass the hash from the compression marker (24 hex characters). Retrieval is by hash and always returns the full original content.",
@@ -12625,7 +12630,7 @@ function isExcludedHost(hostname3, excludeHosts) {
 function isLlmEndpointPath(pathname) {
   return pathname.endsWith("/chat/completions") || pathname.endsWith("/responses") || pathname.endsWith("/messages") || pathname.endsWith(":generateContent") || pathname.endsWith(":streamGenerateContent");
 }
-function shouldRoute(url2, proxy, excludeHosts) {
+function isRoutableUpstream(url2, proxy, excludeHosts) {
   if (url2.protocol !== "http:" && url2.protocol !== "https:") {
     return false;
   }
@@ -12638,7 +12643,17 @@ function shouldRoute(url2, proxy, excludeHosts) {
   if (isExcludedHost(url2.hostname, excludeHosts)) {
     return false;
   }
-  return isLlmEndpointPath(url2.pathname);
+  return true;
+}
+function shouldRoute(url2, proxy, excludeHosts) {
+  return isRoutableUpstream(url2, proxy, excludeHosts) && isLlmEndpointPath(url2.pathname);
+}
+function modelBaseRoutesThroughProxy(baseUrl, proxyUrl, excludeHosts = []) {
+  try {
+    return isRoutableUpstream(new URL(baseUrl), normalizeProxyUrl(proxyUrl), excludeHosts);
+  } catch {
+    return false;
+  }
 }
 function routedUrl(upstream, proxy) {
   return new URL(`${upstream.pathname}${upstream.search}`, proxy.origin);
@@ -12705,6 +12720,33 @@ function withRoutedFetchInput(input, init, proxy, project, excludeHosts) {
     return [new Request(nextUrl, input), nextInit];
   }
   return [nextUrl, nextInit];
+}
+function routeHeadroomRequest(request, options) {
+  const excludes = normalizeExcludeHosts(options.excludeHosts ?? process.env[EXCLUDE_HOSTS_ENV] ?? "");
+  const proxy = normalizeProxyUrl(options.proxyUrl);
+  const [input, init] = withRoutedFetchInput(
+    request,
+    void 0,
+    proxy,
+    options.project,
+    excludes
+  );
+  const direct = new URL(request.url);
+  const alreadyRouted = direct.origin === proxy.origin && isLlmEndpointPath(direct.pathname);
+  if (input === request && init === void 0 && !alreadyRouted) return request;
+  if (alreadyRouted && !options.clientMemoryTools && !options.memoryUnresolved && !options.cwd && !options.memoryProjectID) return request;
+  const routed = new Request(input, init);
+  if (options.clientMemoryTools || options.memoryUnresolved) {
+    for (const key of ["x-headroom-cwd", "x-headroom-project-id", "x-headroom-memory-unresolved", "x-headroom-scope-encoding"]) routed.headers.delete(key);
+  }
+  if (options.cwd) routed.headers.set("x-headroom-cwd", encodeURIComponent(options.cwd));
+  if (options.memoryProjectID) {
+    routed.headers.set("x-headroom-project-id", encodeURIComponent(options.memoryProjectID));
+    routed.headers.set("x-headroom-scope-encoding", "uri-component");
+  }
+  if (options.clientMemoryTools) routed.headers.set("x-headroom-memory-tools", "client");
+  if (options.memoryUnresolved) routed.headers.set("x-headroom-memory-unresolved", "true");
+  return routed;
 }
 function splitNodeArgs(args) {
   const callback = typeof args.at(-1) === "function" ? args.at(-1) : void 0;
@@ -12899,7 +12941,226 @@ function uninstallHeadroomTransport() {
   setState(void 0);
 }
 
+// src/memory-v2.ts
+var MemoryVersionConflict = class extends Error {
+  constructor() {
+    super("Memory owner/version conflict; reload the current scoped ID/hash before retrying.");
+  }
+};
+async function resolveMemorySessionScope(ctx, sessionID, projectOverride) {
+  const session = await ctx.session.get({ sessionID }, { signal: AbortSignal.timeout(3e3) });
+  const cwd = session.location.directory;
+  if (typeof cwd !== "string" || !cwd.trim()) throw new Error("Trusted memory scope unavailable");
+  return { cwd, projectID: projectOverride };
+}
+var text = { type: "string", minLength: 1, maxLength: 16384 };
+var limit = { type: "integer", minimum: 1, maximum: 100 };
+var strings = { type: "array", maxItems: 32, items: text };
+var definitions = [
+  {
+    name: "search",
+    description: "Recall relevant scoped background, not action authority. Current project instructions take precedence.",
+    required: ["query"],
+    properties: { query: text, top_k: limit, entities: strings, include_related: { type: "boolean" } }
+  },
+  {
+    name: "list",
+    description: "Browse current scoped memories with exact IDs and hashes for guarded updates.",
+    required: [],
+    properties: { limit }
+  },
+  {
+    name: "save",
+    description: "Save explicitly useful background in this session's project. Report remembered only after durable success.",
+    required: ["content"],
+    properties: { content: text, facts: strings, entities: strings, importance: { type: "number", minimum: 0, maximum: 1 } }
+  },
+  {
+    name: "update",
+    description: "Replace a specific current memory after reading its exact ID/hash; preserve history. Never infer supersession from similarity.",
+    required: ["memory_id", "new_content", "expected_content_hash", "reason"],
+    properties: { memory_id: text, new_content: text, expected_content_hash: text, reason: text }
+  },
+  {
+    name: "delete",
+    description: "Only after an explicit user forget request, remove current recall by exact ID/hash. History is retained, not purged.",
+    required: ["memory_id", "expected_content_hash", "reason"],
+    properties: { memory_id: text, expected_content_hash: text, reason: text }
+  }
+];
+async function registerMemoryV2(ctx, options) {
+  const endpoint = new URL("/v1/memory/tools", resolveProxyUrl(options));
+  if (!["127.0.0.1", "localhost", "[::1]"].includes(endpoint.hostname)) return async () => {
+  };
+  const lifetime = new AbortController();
+  async function command(tool2, input, sessionID, evidenceID, signal, source) {
+    const scope = await resolveMemorySessionScope(ctx, sessionID, options.project);
+    const body = JSON.stringify({ tool: tool2, arguments: input });
+    if (Buffer.byteLength(body, "utf8") > 65536) throw new Error("Memory command arguments too large");
+    const headers = {
+      "content-type": "application/json",
+      "x-headroom-cwd": encodeURIComponent(scope.cwd),
+      "x-headroom-evidence-id": evidenceID,
+      "x-headroom-memory-tools": "client"
+    };
+    if (scope.projectID) {
+      headers["x-headroom-project-id"] = encodeURIComponent(scope.projectID);
+      headers["x-headroom-scope-encoding"] = "uri-component";
+    }
+    if (source) headers["x-headroom-source"] = source;
+    const signals = [lifetime.signal, AbortSignal.timeout(3e3), ...signal ? [signal] : []];
+    try {
+      const response = await fetch(endpoint, { method: "POST", headers, body, signal: AbortSignal.any(signals) });
+      if (response.status === 409) throw new MemoryVersionConflict();
+      if (!response.ok) throw new Error("Memory unavailable");
+      const result = await response.json();
+      if (!result || typeof result !== "object" || result.status === "error") throw new Error("Memory unavailable");
+      return result;
+    } catch (error45) {
+      if (error45 instanceof MemoryVersionConflict) throw error45;
+      throw new Error("Memory unavailable; durable success not confirmed");
+    }
+  }
+  const registration = await ctx.tool.transform((editor) => {
+    editor.namespace({ name: "memory", description: "Scoped persistent background; never overrides current instructions or permissions." });
+    for (const definition of definitions) {
+      const tool2 = {
+        name: definition.name,
+        description: definition.description,
+        input: { type: "object", properties: definition.properties, required: definition.required, additionalProperties: false },
+        options: { namespace: "memory", codemode: true },
+        execute: async (input, context) => {
+          if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some((key) => !(key in definition.properties))) throw new Error("Invalid memory arguments");
+          const result = await command(
+            `memory_${definition.name}`,
+            input,
+            context.sessionID,
+            `${context.sessionID}:${context.messageID}:${context.id}`,
+            context.signal
+          );
+          return { content: JSON.stringify(result) };
+        }
+      };
+      editor.add(tool2);
+    }
+  });
+  const prompt = await ctx.session.hook("prompt", async (event) => {
+    if (!event.prompt.text || event.prompt.text.length > 16384) return;
+    try {
+      await command(
+        "memory_feedback",
+        { text: event.prompt.text },
+        event.sessionID,
+        `${event.sessionID}:${event.messageID}`,
+        void 0,
+        "opencode-prompt"
+      );
+    } catch {
+      console.warn("Headroom memory feedback unavailable; not confirmed remembered.");
+    }
+  });
+  return async () => {
+    lifetime.abort();
+    await prompt.dispose();
+    await registration.dispose();
+  };
+}
+
+// src/plugin-v2.ts
+var HeadroomV2Plugin = {
+  id: "headroom.opencode.v2",
+  async setup(ctx) {
+    const options = ctx.options;
+    const proxyUrl = resolveProxyUrl(options);
+    const proxy = new URL(proxyUrl);
+    if (proxy.protocol !== "http:" && proxy.protocol !== "https:") {
+      throw new Error("Headroom proxyUrl must use HTTP or HTTPS");
+    }
+    const project = options.project ?? ctx.location.project?.id ?? ctx.location.directory;
+    const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(proxy.hostname);
+    const disposeMemory = await registerMemoryV2(ctx, options);
+    const pending = /* @__PURE__ */ new Set();
+    const key = (event) => JSON.stringify([event.sessionID, event.agent, event.model]);
+    const registration = await ctx.session.hook("http.request", async (event) => {
+      let scope;
+      try {
+        scope = await resolveMemorySessionScope(ctx, event.sessionID, options.project);
+      } catch {
+      }
+      const routed = routeHeadroomRequest(event.request, {
+        proxyUrl,
+        project,
+        excludeHosts: options.excludeHosts,
+        cwd: scope?.cwd,
+        memoryProjectID: scope?.projectID,
+        clientMemoryTools: loopback,
+        memoryUnresolved: !scope
+      });
+      pending.delete(key(event));
+      if (loopback && routed !== event.request) {
+        if (pending.size >= 256) pending.delete(pending.values().next().value);
+        pending.add(key(event));
+      }
+      event.request = routed;
+    });
+    const response = await ctx.session.hook("http.response", (event) => {
+      pending.delete(key(event));
+    });
+    const retry = await ctx.session.hook("retry", (event) => {
+      if (pending.has(key(event)) && event.error.type === "provider.transport" && /^ConnectionRefused\b/.test(event.error.message)) event.decision = { retry: false };
+    });
+    return async () => {
+      await registration.dispose();
+      await response.dispose();
+      await retry.dispose();
+      await disposeMemory();
+      pending.clear();
+    };
+  }
+};
+
 // src/plugin.ts
+var HEADROOM_PLUGIN_ID = "headroom";
+function resolveExcludeHosts(options) {
+  return normalizeExcludeHosts(options?.excludeHosts ?? process.env[EXCLUDE_HOSTS_ENV] ?? "");
+}
+function headroomShellEnv(proxyUrl, project, options) {
+  return {
+    HEADROOM_ACTIVE: "1",
+    HEADROOM_PROXY_URL: proxyUrl,
+    HEADROOM_PROJECT: project,
+    ...options.backend ? { HEADROOM_BACKEND: options.backend } : {}
+  };
+}
+function openAiWireSuffix(pkg) {
+  if (!pkg?.startsWith("@opencode/ai/providers/")) return void 0;
+  if (pkg === "@opencode/ai/providers/openai-compatible" || pkg.endsWith("/chat")) {
+    return "/chat/completions";
+  }
+  if (pkg.endsWith("-responses") || pkg.endsWith("/responses")) return "/responses";
+  return void 0;
+}
+function routeModelsThroughProxy(models, proxyUrl, project, excludeHosts) {
+  for (const model of models.list()) {
+    const providerID = String(model.providerID);
+    const modelID = String(model.id);
+    const provider = models.provider.get(providerID)?.provider;
+    const suffix = openAiWireSuffix(model.package ?? provider?.package);
+    const baseURL = model.settings?.baseURL ?? provider?.settings?.baseURL;
+    if (!suffix || typeof baseURL !== "string") continue;
+    if (!modelBaseRoutesThroughProxy(baseURL, proxyUrl, excludeHosts)) continue;
+    const upstream = new URL(baseURL);
+    models.update(providerID, modelID, (draft) => {
+      draft.settings = { ...draft.settings, baseURL: `${proxyUrl}/v1` };
+      draft.headers = {
+        ...draft.headers,
+        [BASE_URL_HEADER]: upstream.origin,
+        [ORIGINAL_PATH_HEADER]: `${trimTrailingSlashes(upstream.pathname)}${suffix}`,
+        [PROJECT_HEADER]: project
+      };
+    });
+  }
+}
 var HeadroomPlugin = async (input, options = {}) => {
   const pluginOptions = options;
   const proxyUrl = resolveProxyUrl(pluginOptions);
@@ -12927,15 +13188,60 @@ var HeadroomPlugin = async (input, options = {}) => {
       })
     },
     "shell.env": async (_input, output) => {
-      output.env.HEADROOM_ACTIVE = "1";
-      output.env.HEADROOM_PROXY_URL = proxyUrl;
-      output.env.HEADROOM_PROJECT = project;
-      if (pluginOptions.backend) {
-        output.env.HEADROOM_BACKEND = pluginOptions.backend;
-      }
+      Object.assign(output.env, headroomShellEnv(proxyUrl, project, pluginOptions));
     }
   };
 };
+var headroomSetup = async (ctx) => {
+  const pluginOptions = ctx.options;
+  const proxyUrl = resolveProxyUrl(pluginOptions);
+  const project = pluginOptions.project ?? ctx.location.project.id ?? ctx.location.directory;
+  const retrieveTool = createHeadroomRetrieveTool({ proxyBaseUrl: proxyUrl });
+  const excludeHosts = resolveExcludeHosts(pluginOptions);
+  const uninstallTransport = installHeadroomTransport({
+    proxyUrl,
+    project,
+    excludeHosts,
+    debug: pluginOptions.debug
+  });
+  let disposeNative = void 0;
+  try {
+    disposeNative = await HeadroomV2Plugin.setup(ctx);
+    await ctx.model.transform((models) => {
+      routeModelsThroughProxy(models, proxyUrl, project, excludeHosts);
+    });
+    await ctx.tool.transform((editor) => {
+      editor.add({
+        name: retrieveTool.name,
+        description: retrieveTool.description,
+        input: retrieveTool.parameters,
+        // Offer the tool directly, like OpenCode's built-ins, rather than only
+        // through the code-mode `execute` tool.
+        options: { codemode: false },
+        async execute(args) {
+          return { content: await retrieveTool.execute(args) };
+        }
+      });
+    });
+    await ctx.shell.hook("create.before", (shell) => {
+      Object.assign(shell.env, headroomShellEnv(proxyUrl, project, pluginOptions));
+    });
+  } catch (error45) {
+    await disposeNative?.();
+    uninstallTransport();
+    throw error45;
+  }
+  return async () => {
+    await disposeNative?.();
+    uninstallTransport();
+  };
+};
+var HeadroomOpenCodePlugin = {
+  id: HEADROOM_PLUGIN_ID,
+  server: HeadroomPlugin,
+  setup: headroomSetup
+};
+var plugin_default = HeadroomOpenCodePlugin;
 export {
-  HeadroomPlugin as default
+  plugin_default as default
 };
