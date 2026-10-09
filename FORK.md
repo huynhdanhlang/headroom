@@ -23,6 +23,20 @@ bounded provider taxonomy, with the new explicit xAI bucket. The exact native
 CI base supplies Rust/dependency changes. No model/context/worker/cache/security
 deployment settings are changed; runtime receipts and latency claims are separate.
 
+### Terminal-close streaming accounting repair
+
+SSE usage and completion are parsed before forwarding the same chunk. A client
+closing/cancelling immediately on the terminal frame no longer becomes a false
+502 outcome or loses usage and next-turn prefix accounting. Direct Responses,
+Chat Completions and Anthropic streaming, plus both backend streaming siblings,
+share this ordering. Real error events, truncated streams and caught exceptions
+remain failures. The repair adds no EOF wait, stream buffering, model change or
+configuration change; synthetic lifecycle regressions and installed traffic
+receipts qualify it separately from inference latency.
+Known upstream-image limitation: the optional canary ASTgrep interceptor lacks
+its PyPI launcher. It remains disabled in this installation; test-only launcher
+restoration does not establish support in the release image.
+
 ## Synchronization through 3c418f6f (2026-10-08)
 
 Integrated 32 upstream commits: bounded ML work, context/compaction guard,
