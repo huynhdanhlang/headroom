@@ -31,6 +31,7 @@ from headroom.proxy.helpers import (
     COMPRESSION_TIMEOUT_SECONDS,
     _headroom_bypass_enabled,
     extract_tags,
+    invalid_request_body_message,
     jitter_delay_ms,
     sanitize_forwarded_response_headers,
 )
@@ -40,6 +41,7 @@ from headroom.proxy.modes import is_cache_mode
 from headroom.proxy.rate_limit_identity import rate_limit_identity
 from headroom.proxy.semantic_cache_key_policy import compute_request_cache_partition
 from headroom.proxy.stage_timer import StageTimer, emit_stage_timings_log
+from headroom.proxy.tool_schema_savings_policy import without_deferral_flags
 from headroom.proxy.upstream_guard import is_safe_upstream_url
 from headroom.proxy.ws_headers import WS_HOP_BY_HOP_HEADERS
 from headroom.proxy.ws_session_registry import (
@@ -3657,7 +3659,7 @@ class OpenAIHandlerMixin:
                 status_code=400,
                 content={
                     "error": {
-                        "message": f"Invalid request body: {e!s}",
+                        "message": invalid_request_body_message(e),
                         "type": "invalid_request_error",
                         "code": "invalid_json",
                     }
@@ -3839,12 +3841,17 @@ class OpenAIHandlerMixin:
             handler_path,
             custom_upstream_base_url or "",
         )
-        # Fixed taxonomy from the shared helper (zen, zai, meta, openai); any
-        # other custom base is the shared "custom" bucket. Never derive the
+        # Fixed taxonomy from the shared helper (zen, zai, meta, openai, xai);
+        # any other custom base is the shared "custom" bucket. Never derive the
         # label from the request-controlled hostname — see the review on #3759.
+        # Grok CLI routed to xAI without a base-url header is still xai.
         openai_chat_outcome_provider = custom_chat_provider or (
             CUSTOM_BASE_PROVIDER
-            if custom_upstream_base_url or upstream_base_url != self.OPENAI_API_URL
+            if custom_upstream_base_url
+            else "xai"
+            if _is_xai_upstream(upstream_base_url)
+            else CUSTOM_BASE_PROVIDER
+            if upstream_base_url != self.OPENAI_API_URL
             else "openai"
         )
 
@@ -4654,16 +4661,22 @@ class OpenAIHandlerMixin:
 
                 memory_tool_defs = (
                     self.memory_handler.compute_memory_tool_definitions("openai")
-                    if self.memory_handler.config.inject_tools and request.headers.get("x-headroom-memory-tools") != "client"
+                    if self.memory_handler.config.inject_tools
+                    and request.headers.get("x-headroom-memory-tools") != "client"
                     else []
                 )
                 tools, mem_tools_injected = _apply_sticky_mem_tools(
                     provider="openai",
-                    session_id=openai_session_id if request.headers.get("x-headroom-memory-tools") != "client" else None,
+                    session_id=openai_session_id
+                    if request.headers.get("x-headroom-memory-tools") != "client"
+                    else None,
                     request_id=request_id,
                     existing_tools=tools,
                     memory_tools_to_inject=memory_tool_defs,
-                    inject_this_turn=bool(self.memory_handler.config.inject_tools and request.headers.get("x-headroom-memory-tools") != "client"),
+                    inject_this_turn=bool(
+                        self.memory_handler.config.inject_tools
+                        and request.headers.get("x-headroom-memory-tools") != "client"
+                    ),
                     client_declared_tools=bool(_original_tools),
                 )
                 if mem_tools_injected:
@@ -4868,7 +4881,9 @@ class OpenAIHandlerMixin:
         if registered_turn_hooks():
             _th_tools_before = body.get("tools")
             _th_tok_before = (
-                tokenizer.count_text(json.dumps(_th_tools_before, default=str))
+                tokenizer.count_text(
+                    json.dumps(without_deferral_flags(_th_tools_before), default=str)
+                )
                 if _th_tools_before
                 else 0
             )
@@ -4917,7 +4932,9 @@ class OpenAIHandlerMixin:
             except Exception:
                 logger.debug("turn-hook token re-count skipped", exc_info=True)
             _th_tok_after = (
-                tokenizer.count_text(json.dumps(_th_ctx.tools, default=str)) if _th_ctx.tools else 0
+                tokenizer.count_text(json.dumps(without_deferral_flags(_th_ctx.tools), default=str))
+                if _th_ctx.tools
+                else 0
             )
             _th_saved = max(0, _th_tok_before - _th_tok_after)
             if _th_saved > 0:
@@ -6062,7 +6079,7 @@ class OpenAIHandlerMixin:
                 status_code=400,
                 content={
                     "error": {
-                        "message": f"Invalid request body: {e!s}",
+                        "message": invalid_request_body_message(e),
                         "type": "invalid_request_error",
                         "code": "invalid_json",
                     }
@@ -6241,8 +6258,10 @@ class OpenAIHandlerMixin:
         ) or _client_can_receive_memory_tools(memory_client)
         if _ensure_chatgpt_responses_store_false(body, is_chatgpt_auth=is_chatgpt_auth):
             logger.info(f"[{request_id}] Responses: forced store=false for ChatGPT auth")
-        responses_memory_tools_allowed = (_allow_responses_memory_tools(is_chatgpt_auth)
-                                         and request.headers.get("x-headroom-memory-tools") != "client")
+        responses_memory_tools_allowed = (
+            _allow_responses_memory_tools(is_chatgpt_auth)
+            and request.headers.get("x-headroom-memory-tools") != "client"
+        )
 
         # PR-A6 (P5-50, preps P0-6): session-sticky `OpenAI-Beta` merge
         # for /v1/responses. Compute a session_id off the same store the
@@ -6403,7 +6422,8 @@ class OpenAIHandlerMixin:
                                 # responsible for the memory lookup consumer.
                                 query=MemoryQuery.from_messages(
                                     _responses_input_to_waste_messages(None, input_data)
-                                    if request.headers.get("x-headroom-memory-tools") == "client" and isinstance(input_data, list)
+                                    if request.headers.get("x-headroom-memory-tools") == "client"
+                                    and isinstance(input_data, list)
                                     else optimized_messages
                                 ),
                             ),
@@ -7621,8 +7641,10 @@ class OpenAIHandlerMixin:
                 "x-codex-turn-metadata",
             }
         }
-        ws_memory_tools_allowed = (_allow_responses_memory_tools(is_chatgpt_auth)
-                                  and websocket.headers.get("x-headroom-memory-tools") != "client")
+        ws_memory_tools_allowed = (
+            _allow_responses_memory_tools(is_chatgpt_auth)
+            and websocket.headers.get("x-headroom-memory-tools") != "client"
+        )
         _lower_headers = {k.lower(): v for k, v in upstream_headers.items()}
 
         # Build upstream WebSocket URL based on auth mode
@@ -8380,7 +8402,9 @@ class OpenAIHandlerMixin:
                                         request_context=memory_request_ctx,
                                         query=MemoryQuery.from_messages(
                                             _responses_input_to_waste_messages(None, ws_input)
-                                            if websocket.headers.get("x-headroom-memory-tools") == "client" and isinstance(ws_input, list)
+                                            if websocket.headers.get("x-headroom-memory-tools")
+                                            == "client"
+                                            and isinstance(ws_input, list)
                                             else ws_msgs
                                         ),
                                     ),
@@ -8424,13 +8448,17 @@ class OpenAIHandlerMixin:
                                     query=None,
                                     tags=ws_tags,
                                 )
-                            elif websocket.headers.get("x-headroom-memory-tools") == "client" and isinstance(ws_input_for_inject, list):
+                            elif websocket.headers.get(
+                                "x-headroom-memory-tools"
+                            ) == "client" and isinstance(ws_input_for_inject, list):
                                 from headroom.proxy.helpers import (
                                     append_text_to_latest_user_input_item,
                                 )
 
-                                ws_response_body["input"], _ = append_text_to_latest_user_input_item(
-                                    ws_input_for_inject, memory_context
+                                ws_response_body["input"], _ = (
+                                    append_text_to_latest_user_input_item(
+                                        ws_input_for_inject, memory_context
+                                    )
                                 )
                             else:
                                 # List-shaped WS input is owned by the
@@ -10717,7 +10745,7 @@ class OpenAIHandlerMixin:
             except (json.JSONDecodeError, ValueError) as e:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": f"Invalid request body: {e!s}"},
+                    content={"error": invalid_request_body_message(e)},
                 )
             messages = body.get("messages", [])
             _bypass_payload = {

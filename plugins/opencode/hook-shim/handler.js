@@ -5,4 +5,4 @@ if (!proxyUrl) {
   throw new Error("Headroom OpenCode transport shim loaded without HEADROOM_OPENCODE_TRANSPORT_PROXY_URL");
 }
 
-installHeadroomTransport({ proxyUrl });
+installHeadroomTransport({ proxyUrl, sessionToken: process.env.HEADROOM_OPENCODE_SESSION_TOKEN });

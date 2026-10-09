@@ -1,5 +1,5 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-3c418f6@sha256:ae14115e8e9c2638c6511f818279fdc461c7261f41bdee4395753ae0dbe6866a
+FROM ghcr.io/headroomlabs-ai/headroom:code-01d9194@sha256:9fcc722654c54feeb740fd677d19113cd9521baff178db33194db4007cb7545b
 ARG FORK_COMMIT
 USER root
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
@@ -13,6 +13,7 @@ COPY headroom/memory/storage_router.py /usr/local/lib/python3.13/site-packages/h
 COPY headroom/memory/traffic_learner.py /usr/local/lib/python3.13/site-packages/headroom/memory/traffic_learner.py
 COPY headroom/providers/opencode/_dist/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/index.js
 COPY headroom/providers/opencode/_dist/hook-shim/handler.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/hook-shim/handler.js
+COPY headroom/providers/opencode/hook-shim/handler.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/hook-shim/handler.js
 COPY headroom/providers/opencode/_dist/entry.opencode.v2.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/entry.opencode.v2.js
 COPY headroom/providers/opencode/_dist/v2/index.js /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/index.js
 COPY headroom/providers/opencode/_dist/v2/package.json /usr/local/lib/python3.13/site-packages/headroom/providers/opencode/_dist/v2/package.json

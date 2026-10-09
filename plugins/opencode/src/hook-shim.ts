@@ -18,6 +18,7 @@
 // (before #2806 a missing `--import` target crashed every Node child with
 // ERR_MODULE_NOT_FOUND) (#2850).
 import { installHeadroomTransport } from "./transport.js";
+import { resolveSessionToken } from "./proxy-url.js";
 
 const proxyUrl = process.env.HEADROOM_OPENCODE_TRANSPORT_PROXY_URL;
 if (!proxyUrl) {
@@ -26,4 +27,4 @@ if (!proxyUrl) {
   );
 }
 
-installHeadroomTransport({ proxyUrl });
+installHeadroomTransport({ proxyUrl, sessionToken: resolveSessionToken() });

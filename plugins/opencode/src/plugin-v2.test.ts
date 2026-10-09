@@ -91,7 +91,7 @@ describe("Headroom native OpenCode V2 request routing", () => {
     expect(plugin?.setup, "OpenCode V2 requires an id/setup plugin, not the V1 factory").toBeTypeOf("function");
     if (!plugin) return;
     const proxy = await receiver();
-    const runtime = host({ proxyUrl: proxy.url + "/v1" });
+    const runtime = host({ proxyUrl: proxy.url + "/v1", sessionToken: "synthetic-session-owner" });
     const body = JSON.stringify({ model: "gpt-6.1-sol", service_tier: "priority", store: false, stream: true,
       input: [{ type: "reasoning", encrypted_content: "signed-byte-sequence" },
         { type: "function_call", call_id: "call-1", name: "shell", arguments: '{"command":"npm ls --json"}' },
@@ -108,6 +108,7 @@ describe("Headroom native OpenCode V2 request routing", () => {
       expect(await response.text()).toBe('data: {"type":"response.completed"}\n\n');
       expect(proxy.seen[0].url).toBe("/v1/responses?check=1");
       expect(proxy.seen[0].body).toBe(body);
+      expect(proxy.seen[0].headers["x-headroom-session-token"]).toBe("synthetic-session-owner");
       expect(proxy.seen[0].headers.authorization).toBe("Bearer test-only");
       expect(proxy.seen[0].headers["x-headroom-base-url"]).toBe("https://api.openai.com");
       expect(proxy.seen[0].headers["x-headroom-original-path"]).toBe("/v1/responses");

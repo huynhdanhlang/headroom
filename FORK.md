@@ -1,11 +1,27 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `3c418f6f0b190ad1060413c0eadd77f20ab3cf46` (0.40.0).
+Integrated upstream source and native/dependency anchor: `01d9194854233ef6ed04005cf0a5b8c32bf65d6d` (0.40.0).
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37716210892's `digests-code-amd64` artifact (Docker and Rust run 37744868370 passed):
-`ghcr.io/headroomlabs-ai/headroom:code-3c418f6@sha256:ae14115e8e9c2638c6511f818279fdc461c7261f41bdee4395753ae0dbe6866a`.
+37880479598's `digests-code-amd64` artifact (Docker and Rust run 37880479631 passed):
+`ghcr.io/headroomlabs-ai/headroom:code-01d9194@sha256:9fcc722654c54feeb740fd677d19113cd9521baff178db33194db4007cb7545b`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 01d91948 (2026-10-09)
+
+Integrated 34 upstream commits: mixed client-tool CCR recovery, malformed SSE
+handling and failed-stream outcomes, cache-aware billing and savings attribution,
+lazy startup imports, nested JSON preservation, Codex API-key forwarding,
+registered-workspace ASTgrep verification, and security/dependency updates.
+The fork's native-array/uncached accounting, request scope/restoration, shared
+deadlines, frozen prefixes, exact reads/retrieval, and guarded memory remain.
+The native OpenCode adapter and shipped child shim now forward the new registered
+session token; two red transport regressions verify identity was missing before
+adaptation. Shared URL/session-token resolution remains one config owner and
+bundles are regenerated from source. Non-OpenAI custom upstreams retain their
+bounded provider taxonomy, with the new explicit xAI bucket. The exact native
+CI base supplies Rust/dependency changes. No model/context/worker/cache/security
+deployment settings are changed; runtime receipts and latency claims are separate.
 
 ## Synchronization through 3c418f6f (2026-10-08)
 

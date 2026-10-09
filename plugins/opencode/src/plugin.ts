@@ -7,13 +7,14 @@ import {
   createHeadroomRetrieveTool,
   trimTrailingSlashes,
 } from "./retrieve.js";
-import { resolveProxyUrl } from "./proxy-url.js";
+import { resolveProxyUrl, resolveSessionToken } from "./proxy-url.js";
 import { HeadroomV2Plugin } from "./plugin-v2.js";
 import {
   BASE_URL_HEADER,
   EXCLUDE_HOSTS_ENV,
   ORIGINAL_PATH_HEADER,
   PROJECT_HEADER,
+  SESSION_TOKEN_HEADER,
   installHeadroomTransport,
   modelBaseRoutesThroughProxy,
   normalizeExcludeHosts,
@@ -25,6 +26,7 @@ export interface HeadroomOpenCodePluginOptions {
   excludeHosts?: string[];
   backend?: string;
   debug?: boolean;
+  sessionToken?: string;
 }
 
 export const HEADROOM_PLUGIN_ID = "headroom";
@@ -74,6 +76,7 @@ function routeModelsThroughProxy(
   proxyUrl: string,
   project: string,
   excludeHosts: string[],
+  sessionToken?: string,
 ): void {
   for (const model of models.list()) {
     // DeepMutable turns the branded ID strings into object types.
@@ -92,6 +95,7 @@ function routeModelsThroughProxy(
         [BASE_URL_HEADER]: upstream.origin,
         [ORIGINAL_PATH_HEADER]: `${trimTrailingSlashes(upstream.pathname)}${suffix}`,
         [PROJECT_HEADER]: project,
+        ...(sessionToken ? { [SESSION_TOKEN_HEADER]: sessionToken } : {}),
       };
     });
   }
@@ -111,6 +115,7 @@ export const HeadroomPlugin: Plugin = async (input, options = {}) => {
     project,
     excludeHosts: pluginOptions.excludeHosts,
     debug: pluginOptions.debug,
+    sessionToken: resolveSessionToken(pluginOptions),
   });
 
   return {
@@ -146,11 +151,13 @@ export const headroomSetup: PluginV2.Plugin["setup"] = async (ctx) => {
     pluginOptions.project ?? ctx.location.project.id ?? ctx.location.directory;
   const retrieveTool = createHeadroomRetrieveTool({ proxyBaseUrl: proxyUrl });
   const excludeHosts = resolveExcludeHosts(pluginOptions);
+  const sessionToken = resolveSessionToken(pluginOptions);
   const uninstallTransport = installHeadroomTransport({
     proxyUrl,
     project,
     excludeHosts,
     debug: pluginOptions.debug,
+    sessionToken,
   });
 
   // The dual-loader default must keep the fork's native scoped memory and
@@ -160,7 +167,7 @@ export const headroomSetup: PluginV2.Plugin["setup"] = async (ctx) => {
   try {
     disposeNative = await HeadroomV2Plugin.setup(ctx);
     await ctx.model.transform((models) => {
-      routeModelsThroughProxy(models, proxyUrl, project, excludeHosts);
+      routeModelsThroughProxy(models, proxyUrl, project, excludeHosts, sessionToken);
     });
     await ctx.tool.transform((editor) => {
       editor.add({

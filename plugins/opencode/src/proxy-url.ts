@@ -13,3 +13,7 @@ export function resolveProxyUrl(options?: { proxyUrl?: string }): string {
   return (options?.proxyUrl ?? process.env.HEADROOM_PROXY_URL ?? process.env.HEADROOM_BASE_URL ?? getDefaultProxyUrl())
     .replace(/\/+$/, "");
 }
+
+export function resolveSessionToken(options?: { sessionToken?: string }): string | undefined {
+  return options?.sessionToken ?? process.env.HEADROOM_OPENCODE_SESSION_TOKEN;
+}

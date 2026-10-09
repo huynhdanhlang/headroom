@@ -58,6 +58,24 @@ function proxyServer(pathPrefix: string = "/v1"): Promise<{
 }
 
 describe("Headroom OpenCode transport", () => {
+  it("preserves registered workspace identity in the shipped Node child shim", async () => {
+    const proxy = await proxyServer();
+    const shim = new URL("../../../headroom/providers/opencode/hook-shim/handler.js", import.meta.url);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        childProcess.execFile(process.execPath, ["--import", shim.href, "--input-type=module", "-e",
+          'const response = await fetch("https://api.openai.com/v1/responses", {method: "POST", body: "synthetic"}); if (!response.ok) throw new Error("probe failed"); await response.text();'], {
+          timeout: 5000,
+          env: { ...process.env, HEADROOM_OPENCODE_TRANSPORT_PROXY_URL: proxy.url,
+            HEADROOM_OPENCODE_SESSION_TOKEN: "synthetic-child-owner" },
+        }, error => error ? reject(error) : resolve());
+      });
+      expect(proxy.seen).toHaveLength(1);
+      expect(proxy.seen[0].headers["x-headroom-session-token"]).toBe("synthetic-child-owner");
+      expect(proxy.seen[0].headers["x-headroom-base-url"]).toBe("https://api.openai.com");
+      expect(proxy.seen[0].body).toBe("synthetic");
+    } finally { await proxy.close(); }
+  });
   it("routes fetch chat paths through /v1/chat/completions with proxy base and normalized-path header", async () => {
     const proxyTargets = ["http://127.0.0.1:8787", "http://127.0.0.1:8787/v1"];
     const upstreamPath = "/api/coding/paas/v4/chat/completions";
@@ -929,5 +947,115 @@ describe("Headroom OpenCode transport", () => {
     expect(globalThis.fetch).toBe(originalFetch);
     expect(http.request).toBe(originalHttpRequest);
     expect(https.request).toBe(originalHttpsRequest);
+  });
+
+  it("sends x-headroom-session-token header on routed fetch calls when sessionToken is set", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (..._args: FetchCall) => new Response("ok"));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    installHeadroomTransport({ proxyUrl: "http://127.0.0.1:8787/v1", sessionToken: "tok-abc" });
+
+    await fetch("https://api.anthropic.com/v1/messages", { method: "POST" });
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get("x-headroom-session-token")).toBe("tok-abc");
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("omits x-headroom-session-token header when sessionToken is not set", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (..._args: FetchCall) => new Response("ok"));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    installHeadroomTransport({ proxyUrl: "http://127.0.0.1:8787/v1" });
+
+    await fetch("https://api.anthropic.com/v1/messages", { method: "POST" });
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get("x-headroom-session-token")).toBeNull();
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("omits x-headroom-session-token header when sessionToken is an empty string", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (..._args: FetchCall) => new Response("ok"));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    installHeadroomTransport({ proxyUrl: "http://127.0.0.1:8787/v1", sessionToken: "" });
+
+    await fetch("https://api.anthropic.com/v1/messages", { method: "POST" });
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get("x-headroom-session-token")).toBeNull();
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("sends x-headroom-session-token header on routed Node https.request calls when sessionToken is set", async () => {
+    const proxy = await proxyServer();
+    installHeadroomTransport({ proxyUrl: proxy.url, sessionToken: "tok-abc" });
+
+    await new Promise<void>((resolve, reject) => {
+      const req = https.request(
+        "https://api.anthropic.com/v1/messages",
+        { method: "POST" },
+        (res) => {
+          res.resume();
+          res.on("end", resolve);
+        },
+      );
+      req.on("error", reject);
+      req.end("{}");
+    });
+
+    expect(proxy.seen[0].headers["x-headroom-session-token"]).toBe("tok-abc");
+
+    await proxy.close();
+  });
+
+  it("updates the session token on reinstall rather than keeping the first value", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (..._args: FetchCall) => new Response("ok"));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const firstDispose = installHeadroomTransport({
+      proxyUrl: "http://127.0.0.1:8787/v1",
+      sessionToken: "tok-A",
+    });
+    installHeadroomTransport({ proxyUrl: "http://127.0.0.1:8787/v1", sessionToken: "tok-B" });
+
+    await fetch("https://api.anthropic.com/v1/messages", { method: "POST" });
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get("x-headroom-session-token")).toBe("tok-B");
+
+    firstDispose();
+    globalThis.fetch = originalFetch;
+  });
+
+  it("clears the session token on reinstall when the new options omit it", async () => {
+    // Deliberate: reinstall is last-write-wins for every InstallOptions
+    // field (proxyUrl, project, debug already work this way) -- an install
+    // without a token must not leave a stale one active.
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async (..._args: FetchCall) => new Response("ok"));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const firstDispose = installHeadroomTransport({
+      proxyUrl: "http://127.0.0.1:8787/v1",
+      sessionToken: "tok-A",
+    });
+    installHeadroomTransport({ proxyUrl: "http://127.0.0.1:8787/v1" });
+
+    await fetch("https://api.anthropic.com/v1/messages", { method: "POST" });
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get("x-headroom-session-token")).toBeNull();
+
+    firstDispose();
+    globalThis.fetch = originalFetch;
   });
 });

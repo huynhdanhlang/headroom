@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode/plugin/promise/plugin";
 import type { HeadroomOpenCodePluginOptions } from "./plugin.js";
-import { resolveProxyUrl } from "./proxy-url.js";
+import { resolveProxyUrl, resolveSessionToken } from "./proxy-url.js";
 import { routeHeadroomRequest } from "./transport.js";
 import { registerMemoryV2, resolveMemorySessionScope } from "./memory-v2.js";
 
@@ -29,6 +29,7 @@ export const HeadroomV2Plugin: Plugin = {
         proxyUrl, project, excludeHosts: options.excludeHosts,
         cwd: scope?.cwd, memoryProjectID: scope?.projectID,
         clientMemoryTools: loopback, memoryUnresolved: !scope,
+        sessionToken: resolveSessionToken(options),
       });
       pending.delete(key(event));
       if (loopback && routed !== event.request) {
