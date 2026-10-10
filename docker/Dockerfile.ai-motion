@@ -2,6 +2,13 @@
 FROM ghcr.io/headroomlabs-ai/headroom:code-01d9194@sha256:9fcc722654c54feeb740fd677d19113cd9521baff178db33194db4007cb7545b
 ARG FORK_COMMIT
 USER root
+COPY headroom/providers/anthropic.py /usr/local/lib/python3.13/site-packages/headroom/providers/anthropic.py
+COPY headroom/proxy/cost.py /usr/local/lib/python3.13/site-packages/headroom/proxy/cost.py
+COPY headroom/proxy/handlers/gemini.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/gemini.py
+COPY headroom/proxy/outcome.py /usr/local/lib/python3.13/site-packages/headroom/proxy/outcome.py
+COPY headroom/proxy/prometheus_metrics.py /usr/local/lib/python3.13/site-packages/headroom/proxy/prometheus_metrics.py
+COPY headroom/proxy/provider_usage.py /usr/local/lib/python3.13/site-packages/headroom/proxy/provider_usage.py
+COPY headroom/telemetry/reporter.py /usr/local/lib/python3.13/site-packages/headroom/telemetry/reporter.py
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
 COPY headroom/memory/adapters/sqlite.py /usr/local/lib/python3.13/site-packages/headroom/memory/adapters/sqlite.py
 COPY headroom/memory/backends/local.py /usr/local/lib/python3.13/site-packages/headroom/memory/backends/local.py

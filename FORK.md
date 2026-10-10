@@ -1,11 +1,26 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source and native/dependency anchor: `01d9194854233ef6ed04005cf0a5b8c32bf65d6d` (0.40.0).
+Integrated upstream source: `8c1beb20aeb8f0576095ae4893176ce16c2ede2a` (0.40.0).
+Native/dependency anchor: `01d9194854233ef6ed04005cf0a5b8c32bf65d6d`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
 37880479598's `digests-code-amd64` artifact (Docker and Rust run 37880479631 passed):
 `ghcr.io/headroomlabs-ai/headroom:code-01d9194@sha256:9fcc722654c54feeb740fd677d19113cd9521baff178db33194db4007cb7545b`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Python-only synchronization through 8c1beb20 (2026-10-10)
+
+Integrated two accounting/pricing fixes: provider-reported billed input on
+streamed turns and the existing Anthropic long-context premium when LiteLLM's
+above-200k rate is missing. The shared billed-input helper consumes raw provider
+input, not the fork's expanded continuation prompt total; a red regression
+reproduced 240 instead of 135 billed tokens before this merge adaptation.
+Whole-prompt totals and raw uncached input remain separate. Terminal-close
+accounting/cleanup, context/read protections, request isolation, exact retrieval
+and memory ownership are retained. No native/dependency inputs changed; the
+existing immutable base is kept and every changed runtime file is overlaid.
+These commits do not fix HTTP/2 resets or upstream 503s. Transport settings and
+model/context choices are unchanged; installation/runtime receipts are separate.
 
 ## Synchronization through 01d91948 (2026-10-09)
 

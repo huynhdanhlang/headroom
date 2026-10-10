@@ -262,6 +262,7 @@ class TestStreamingMemoryContinuation:
         assert len(outcomes) == 1
         assert outcomes[0].optimized_tokens == 135
         assert outcomes[0].uncached_input_tokens == 30
+        assert outcomes[0].provider_input_tokens == 135
         assert outcomes[0].cache_read_tokens == 100
         assert outcomes[0].cache_write_tokens == 5
         assert outcomes[0].cache_write_5m_tokens == 2
