@@ -32,10 +32,17 @@ def test_packaged_bundle_is_committed_and_self_contained() -> None:
     assert "setup: headroomSetup" in text
 
 
-def test_packaged_bundle_is_the_only_file_in_its_directory() -> None:
+def test_packaged_bundle_has_no_shadowing_loader_entries() -> None:
     # OpenCode 2.x resolves `<dir>/server.*` before `<dir>/index.*`, and 1.x
     # prefers a `package.json` entry — a stray file here would shadow index.js.
-    assert sorted(p.name for p in _PACKAGED.iterdir()) == ["index.js"]
+    # The fork also ships explicitly selected V2 and child-transport assets.
+    # None is a top-level server.* or package.json loader override.
+    assert sorted(p.name for p in _PACKAGED.iterdir()) == [
+        "entry.opencode.v2.js", "hook-shim", "index.js", "v2"
+    ]
+    assert (_PACKAGED / "entry.opencode.v2.js").is_file()
+    assert (_PACKAGED / "hook-shim" / "handler.js").is_file()
+    assert (_PACKAGED / "v2" / "index.js").is_file()
 
 
 def test_hook_shim_is_committed_next_to_the_entry_bundle() -> None:

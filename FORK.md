@@ -1,12 +1,28 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `8c1beb20aeb8f0576095ae4893176ce16c2ede2a` (0.40.0).
-Native/dependency anchor: `01d9194854233ef6ed04005cf0a5b8c32bf65d6d`.
+Integrated upstream source: `976aa714ef3e19174dc0cb586cee7b20d064e4ef` (0.40.0).
+Native/dependency anchor: `976aa714ef3e19174dc0cb586cee7b20d064e4ef`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-37880479598's `digests-code-amd64` artifact (Docker and Rust run 37880479631 passed):
-`ghcr.io/headroomlabs-ai/headroom:code-01d9194@sha256:9fcc722654c54feeb740fd677d19113cd9521baff178db33194db4007cb7545b`.
+38066303269's `digests-code-amd64` artifact (Docker and main CI 38066303378 passed):
+`ghcr.io/headroomlabs-ai/headroom:code-976aa71@sha256:24279fe92014ae19aef2f1fe88b965bb3abc9948d10aade6581390ba30aec9a8`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 976aa714 (2026-10-11)
+
+Integrated 51 upstream cleanup, deprecation and shared-helper commits, including
+native Rust changes and removed runtime modules. The matching immutable base
+supplies these changes; only remaining fork runtime differences are overlaid.
+SQLite keeps guarded conflict operations and upstream deprecation warnings.
+Responses keeps frozen cache-mode messages and read-protected output parts while
+removing obsolete extraction diagnostics. Client-owned recall retains hybrid
+retrieval, read-only framing, exact hashes, bounded rows and access auditing;
+the deleted test-only ranker API is not resurrected. Request isolation/shared
+deadlines, exact retrieval, terminal-close cleanup, raw continuation billing,
+OpenCode V2 and guarded project memory are retained. Model/context/worker/cache
+and transport settings are unchanged. Installation receipts qualify runtime
+behavior separately; this update does not establish a model speedup or fix
+upstream HTTP/2 resets.
 
 ## Python-only synchronization through 8c1beb20 (2026-10-10)
 
