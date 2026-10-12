@@ -10,6 +10,21 @@ Pin this host's immutable platform digest rather than waiting for the multi-arch
 
 ## Synchronization through 976aa714 (2026-10-11)
 
+### ChatGPT SSE transport cooldown (2026-10-12)
+
+Retain HTTP/2 for healthy streaming. A recognized ChatGPT Responses HTTP/2
+StreamReset/ConnectionTerminated selects the existing pinned HTTP/1.1 pool
+for new SSE requests for five minutes; then HTTP/2 is tried again. State is
+per proxy and excludes other hosts, compaction routes, ordinary H1 failures
+and WebSockets. Opening failures keep the existing bounded retry count and
+identical outbound bytes. Mid-stream failures are never replayed or promoted
+to successful completion. Transport transitions are logged without payloads.
+An isolated direct A/B completed 6/6 requests on each protocol; it does not
+establish long-stream reliability or a model speedup. H1 was not uniformly
+faster, so it is not enabled globally. Context/cache/memory/accounting and
+all deployment model/worker settings are unchanged. Upstream WS service
+restarts and genuine provider failures remain outside this mitigation.
+
 Integrated 51 upstream cleanup, deprecation and shared-helper commits, including
 native Rust changes and removed runtime modules. The matching immutable base
 supplies these changes; only remaining fork runtime differences are overlaid.

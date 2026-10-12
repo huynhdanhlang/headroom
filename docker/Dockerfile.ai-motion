@@ -21,6 +21,7 @@ COPY headroom/proxy/gateway_responses.py /usr/local/lib/python3.13/site-packages
 COPY headroom/proxy/handlers/anthropic.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/anthropic.py
 COPY headroom/proxy/handlers/openai.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/openai.py
 COPY headroom/proxy/handlers/streaming.py /usr/local/lib/python3.13/site-packages/headroom/proxy/handlers/streaming.py
+COPY headroom/proxy/sse_transport_policy.py /usr/local/lib/python3.13/site-packages/headroom/proxy/sse_transport_policy.py
 COPY headroom/proxy/memory_commands.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_commands.py
 COPY headroom/proxy/memory_handler.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_handler.py
 COPY headroom/proxy/memory_tool_stream.py /usr/local/lib/python3.13/site-packages/headroom/proxy/memory_tool_stream.py

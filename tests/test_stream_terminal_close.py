@@ -230,3 +230,67 @@ async def test_backend_terminal_close_preserves_accounting_and_prefix(
         assert tracker.update_from_response.call_count == 1
     else:
         tracker.update_from_response.assert_not_called()
+
+
+async def transport_stream(proxy, url="https://chatgpt.com/backend-api/codex/responses"):
+    return await proxy._stream_response(
+        url=url, headers={}, body={"model":"test","stream":True,"input":[]},
+        provider="openai", model="test", request_id="transport-regression",
+        original_tokens=12, optimized_tokens=10, tokens_saved=2,
+        transforms_applied=[], tags={}, optimization_latency=0.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_chatgpt_reset_before_headers_uses_h1_without_recompressing(stream_proxy):
+    wire = b'event: response.completed\ndata: {"type":"response.completed","response":{"usage":{"input_tokens":10,"output_tokens":1}}}\n\n'
+    sent = []
+    def h2(request):
+        sent.append(("h2", request.content))
+        raise httpx.RemoteProtocolError("<StreamReset stream_id:1, error_code:2, remote_reset:True>")
+    def h1(request):
+        sent.append(("h1", request.content))
+        return httpx.Response(200, content=wire, extensions={"http_version":b"HTTP/1.1"})
+    stream_proxy.config.http2 = True
+    stream_proxy.config.retry_max_attempts = 2
+    async with httpx.AsyncClient(transport=httpx.MockTransport(h2)) as primary, httpx.AsyncClient(transport=httpx.MockTransport(h1)) as fallback:
+        stream_proxy.http_client, stream_proxy.http_client_h1 = primary, fallback
+        response = await transport_stream(stream_proxy)
+        assert response.status_code == 200
+        assert b"".join([chunk async for chunk in response.body_iterator]) == wire
+    assert [name for name, _ in sent] == ["h2", "h1"]
+    assert sent[0][1] == sent[1][1]
+    assert stream_proxy._finalize_stream_response.await_args.kwargs["status_code"] == 200
+
+
+@pytest.mark.asyncio
+async def test_partial_chatgpt_reset_is_not_replayed_and_next_request_uses_h1(stream_proxy):
+    partial = b'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"partial"}\n\n'
+    terminal = b'event: response.completed\ndata: {"type":"response.completed","response":{"usage":{"input_tokens":10,"output_tokens":1}}}\n\n'
+    calls = []
+    class ResetBody(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield partial
+            raise httpx.RemoteProtocolError("<StreamReset stream_id:3, error_code:2, remote_reset:True>")
+    def h2(request):
+        calls.append("h2")
+        return httpx.Response(200, stream=ResetBody(), extensions={"http_version":b"HTTP/2"})
+    def h1(request):
+        calls.append("h1")
+        return httpx.Response(200, content=terminal, extensions={"http_version":b"HTTP/1.1"})
+    stream_proxy.config.http2 = True
+    async with httpx.AsyncClient(transport=httpx.MockTransport(h2)) as primary, httpx.AsyncClient(transport=httpx.MockTransport(h1)) as fallback:
+        stream_proxy.http_client, stream_proxy.http_client_h1 = primary, fallback
+        first = await transport_stream(stream_proxy)
+        failed_wire = b"".join([chunk async for chunk in first.body_iterator])
+        assert failed_wire.startswith(partial) and b"event: error" in failed_wire
+        assert b"response.completed" not in failed_wire
+        assert calls == ["h2"]
+        assert stream_proxy._finalize_stream_response.await_args.kwargs["status_code"] == 502
+        second = await transport_stream(stream_proxy)
+        assert b"".join([chunk async for chunk in second.body_iterator]) == terminal
+        assert calls == ["h2", "h1"]
+        other = await transport_stream(stream_proxy, "https://api.openai.com/v1/responses")
+        other_wire = b"".join([chunk async for chunk in other.body_iterator])
+        assert other_wire.startswith(partial) and b"event: error" in other_wire
+        assert calls == ["h2", "h1", "h2"]

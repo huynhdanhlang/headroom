@@ -41,6 +41,7 @@ from headroom.proxy.memory_tool_stream import (
     MemoryToolStreamFilter,
     MemoryToolStreamOverflowError,
 )
+from headroom.proxy.sse_transport_policy import ChatGPTSSETransportPolicy
 from headroom.proxy.stream_output_tokens import estimate_output_tokens
 from headroom.utils import format_exception_message
 
@@ -1335,6 +1336,32 @@ class StreamingMixin:
         # Open connection before generator to capture upstream response headers
         # (needed to forward ratelimit headers to the client via StreamingResponse)
         assert self.http_client is not None, "http_client must be initialized before streaming"
+        transport_policy = self.__dict__.get("_chatgpt_sse_transport_policy")
+        if transport_policy is None:
+            transport_policy = ChatGPTSSETransportPolicy()
+            self._chatgpt_sse_transport_policy = transport_policy
+
+        def select_stream_client() -> httpx.AsyncClient:
+            if provider == "openai" and transport_policy.prefers_http1(url):
+                client = getattr(self, "http_client_h1", None)
+                if client is None:
+                    raise httpx.ConnectError("HTTP/1.1 upstream pool is unavailable")
+                return client
+            return self.http_client
+
+        def record_h2_reset(error: Exception) -> None:
+            if (
+                provider == "openai"
+                and upstream_client is self.http_client
+                and getattr(self.config, "http2", False)
+                and transport_policy.record_reset(url, error)
+            ):
+                logger.warning(
+                    "[%s] event=chatgpt_sse_h1_cooldown seconds=300 reason=http2_reset",
+                    request_id,
+                )
+
+        upstream_client = self.http_client
         try:
             retry_attempts = max(1, getattr(self.config, "retry_max_attempts", 3))
             upstream_response = None
@@ -1342,10 +1369,11 @@ class StreamingMixin:
 
             for attempt in range(retry_attempts):
                 try:
-                    _upstream_req = self.http_client.build_request(
+                    upstream_client = select_stream_client()
+                    _upstream_req = upstream_client.build_request(
                         "POST", url, content=outbound_bytes, headers=outbound_headers
                     )
-                    upstream_response = await self.http_client.send(_upstream_req, stream=True)
+                    upstream_response = await upstream_client.send(_upstream_req, stream=True)
                     if _codex_wire_debug:
                         capture_codex_wire_debug(
                             "http_stream_upstream_response_headers",
@@ -1393,6 +1421,7 @@ class StreamingMixin:
                 # before any body byte is forwarded to the client, so re-sending
                 # on a fresh connection is safe and avoids a 502. (#1639)
                 except httpx.TransportError as e:
+                    record_h2_reset(e)
                     last_connect_error = e
                     if attempt >= retry_attempts - 1:
                         raise
@@ -1932,6 +1961,8 @@ class StreamingMixin:
                 yield f"event: error\ndata: {json.dumps(error_event)}\n\n".encode()
             except Exception as e:
                 completed_normally = False
+                if upstream_response.http_version == "HTTP/2":
+                    record_h2_reset(e)
                 logger.error(f"[{request_id}] Unexpected streaming error: {e}")
                 guarded_tail = _drain_context_guard()
                 if guarded_tail:
