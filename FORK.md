@@ -1,12 +1,26 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `976aa714ef3e19174dc0cb586cee7b20d064e4ef` (0.40.0).
-Native/dependency anchor: `976aa714ef3e19174dc0cb586cee7b20d064e4ef`.
+Integrated upstream source: `0126fba63f5af3c8022085d0d033dce56fe5db65` (0.40.0).
+Native/dependency anchor: `0126fba63f5af3c8022085d0d033dce56fe5db65`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-38066303269's `digests-code-amd64` artifact (Docker and main CI 38066303378 passed):
-`ghcr.io/headroomlabs-ai/headroom:code-976aa71@sha256:24279fe92014ae19aef2f1fe88b965bb3abc9948d10aade6581390ba30aec9a8`.
+38334824601's `digests-code-amd64` artifact (Docker and main CI 38334824627 passed):
+`ghcr.io/headroomlabs-ai/headroom:code-0126fba@sha256:dcd756d1cb187530e81698e4ac44cb53ee2a5867741a6c0053189323aff55dc4`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 0126fba6 (2026-10-13)
+
+Integrated 11 upstream commits without conflicts. These add payload-safe bounded
+diagnostics, visible ledger/MCP/metrics failures, shared installer/registry
+helpers, proxy busy-port diagnostics, and Anthropic-compatible cumulative
+stream cache accounting plus Fireworks session affinity. The exact upstream
+image supplies the complete new runtime; the remaining fork differences are
+explicit overlays. Cached prefixes, source-read protection, isolated request
+state/shared deadlines, exact retrieval, client-owned memory, raw provider
+billing, terminal-close accounting and the five-minute SSE transport cooldown
+remain. No model/context/cache/worker or live transport settings are changed.
+Installation and request receipts are separate from source integration; these
+changes do not establish model inference acceleration or quota savings.
 
 ## Synchronization through 976aa714 (2026-10-11)
 
