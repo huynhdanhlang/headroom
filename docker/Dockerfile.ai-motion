@@ -1,5 +1,5 @@
 # Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-0126fba@sha256:dcd756d1cb187530e81698e4ac44cb53ee2a5867741a6c0053189323aff55dc4
+FROM ghcr.io/headroomlabs-ai/headroom:code-f1bc260@sha256:b830c60e6d90762c11499c70dcff658cc83dce6be9aaeed18e58c6d32bbe720f
 ARG FORK_COMMIT
 USER root
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html

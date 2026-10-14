@@ -1,12 +1,27 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `0126fba63f5af3c8022085d0d033dce56fe5db65` (0.40.0).
-Native/dependency anchor: `0126fba63f5af3c8022085d0d033dce56fe5db65`.
+Integrated upstream source: `f1bc260948c159549d6937e9c4d2cf969256f2bb` (0.40.0).
+Native/dependency anchor: `f1bc260948c159549d6937e9c4d2cf969256f2bb`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-38334824601's `digests-code-amd64` artifact (Docker and main CI 38334824627 passed):
-`ghcr.io/headroomlabs-ai/headroom:code-0126fba@sha256:dcd756d1cb187530e81698e4ac44cb53ee2a5867741a6c0053189323aff55dc4`.
+38485384583's `digests-code-amd64` artifact (Docker, main CI 38485384669 and Security 38485384623 passed):
+`ghcr.io/headroomlabs-ai/headroom:code-f1bc260@sha256:b830c60e6d90762c11499c70dcff658cc83dce6be9aaeed18e58c6d32bbe720f`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through f1bc2609 (2026-10-14)
+
+Integrated ten upstream commits without conflicts. The rebuilt native base
+limits Magika ORT intra-op execution to one thread to avoid idle spin and
+pins quinn-proto 0.11.19 for the five previously reported advisories. Python
+changes keep blank-line detection linear, preserve wrapped retrieval output,
+reuse Claude fork cache lineage, retain Haiku mid-conversation system messages,
+and correct advertised Copilot hosts/next-edit routes and dedicated extensions.
+Fork request isolation/shared deadlines, strict cached prefixes/source-read
+protection, exact retrieval, client-owned memory, raw billing/terminal cleanup
+and the five-minute SSE cooldown are retained. Models/context/memory/cache and
+worker settings are unchanged. These commits do not include the proposed H2
+cancellation backport or Responses failure-event repair from the separate
+research; installation receipts do not imply those root causes are fixed.
 
 ## Synchronization through 0126fba6 (2026-10-13)
 
