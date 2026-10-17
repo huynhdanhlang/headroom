@@ -1,12 +1,29 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `f1bc260948c159549d6937e9c4d2cf969256f2bb` (0.40.0).
-Native/dependency anchor: `f1bc260948c159549d6937e9c4d2cf969256f2bb`.
+Integrated upstream source: `2912b7b620d7abd39828db73e4f326b9a041d309` (0.41.0).
+Native/dependency anchor: `2912b7b620d7abd39828db73e4f326b9a041d309`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
-38485384583's `digests-code-amd64` artifact (Docker, main CI 38485384669 and Security 38485384623 passed):
-`ghcr.io/headroomlabs-ai/headroom:code-f1bc260@sha256:b830c60e6d90762c11499c70dcff658cc83dce6be9aaeed18e58c6d32bbe720f`.
+38972065567's `digests-code-amd64` artifact (Docker, main CI 38972065620 and Security 38972077764 passed):
+`ghcr.io/headroomlabs-ai/headroom:code-2912b7b@sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Synchronization through 2912b7b6 (2026-10-17)
+
+Integrated 33 upstream commits and release 0.41.0. The exact native base
+supplies Rust/dependency security updates, including MCP 1.30+, hf-xet 1.6+
+and rustls 0.23.46. Upstream adds provider-reported Responses cache writes,
+per-request counterfactual savings, turn-hook net tool accounting, streamed
+buffered CCR requests, bounded failure diagnostics and shared CCR persistence.
+The OpenCode lock conflict is regenerated from the merged manifest, retaining
+the fork's exact @opencode/plugin 2.0.22 pin; standalone bundles are rebuilt.
+Fork request scopes/shared deadlines, cache-mode frozen prefixes/read protection,
+exact retrieval/client-owned memory, raw provider input billing, terminal-close
+cleanup and H2-to-H1 cooldown/no replay are retained. Model/context/cache/memory
+and worker settings are unchanged. Telemetry remains explicitly off. These
+commits do not include the separate unapproved httpcore cancellation backport
+or Responses failure-event repair; real runtime qualification and measured
+overhead are recorded separately, not asserted as inference/quota improvements.
 
 ## Synchronization through f1bc2609 (2026-10-14)
 

@@ -76,9 +76,9 @@ def test_actual_maintenance_recipe_is_supported():
 
 def test_guard_pins_integrated_upstream_source_and_native_image():
     module = guard()
-    assert module.UPSTREAM_BASE == "01d9194854233ef6ed04005cf0a5b8c32bf65d6d"
+    assert module.UPSTREAM_BASE == "2912b7b620d7abd39828db73e4f326b9a041d309"
     assert module.BASE_IMAGE == (
-        "ghcr.io/headroomlabs-ai/headroom:code-01d9194@"
-        "sha256:9fcc722654c54feeb740fd677d19113cd9521baff178db33194db4007cb7545b"
+        "ghcr.io/headroomlabs-ai/headroom:code-2912b7b@"
+        "sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f"
     )
     assert module.SITE_PACKAGES == "/usr/local/lib/python3.13/site-packages/"
