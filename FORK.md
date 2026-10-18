@@ -1,12 +1,25 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `2912b7b620d7abd39828db73e4f326b9a041d309` (0.41.0).
+Integrated upstream source: `fbf7bc3278c11975299b9bd0a2ecf200dfd25a05` (0.41.0).
 Native/dependency anchor: `2912b7b620d7abd39828db73e4f326b9a041d309`.
 
 The native/dependency base is the upstream AMD64 image from matching CI run
 38972065567's `digests-code-amd64` artifact (Docker, main CI 38972065620 and Security 38972077764 passed):
 `ghcr.io/headroomlabs-ai/headroom:code-2912b7b@sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f`.
 Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+
+## Python-only synchronization through fbf7bc32 (2026-10-18)
+
+Integrated two upstream commits: Responses create hooks run before model-gated
+HTTP/WS processing, and turn-hook/tool-deferral savings appear in extension
+statistics including Codex WebSocket outcomes. The unchanged exact native base
+is retained; all eight changed runtime modules are explicit overlays. The only
+merge conflict adds MappingProxyType beside the fork's wraps import. Request
+isolation, frozen prefixes/read protection, client-owned memory, exact retrieval,
+raw billing, terminal-close cleanup and H2-to-H1 cooldown/no replay remain.
+Models, context, memory, cache, workers and telemetry settings are unchanged.
+These changes do not include the separate experimental stream-failure repairs
+or establish provider inference speedup or quota savings.
 
 ## Synchronization through 2912b7b6 (2026-10-17)
 

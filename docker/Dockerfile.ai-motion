@@ -2,6 +2,12 @@
 FROM ghcr.io/headroomlabs-ai/headroom:code-2912b7b@sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f
 ARG FORK_COMMIT
 USER root
+COPY headroom/observability/metrics.py /usr/local/lib/python3.13/site-packages/headroom/observability/metrics.py
+COPY headroom/perf/analyzer.py /usr/local/lib/python3.13/site-packages/headroom/perf/analyzer.py
+COPY headroom/proxy/prometheus_metrics.py /usr/local/lib/python3.13/site-packages/headroom/proxy/prometheus_metrics.py
+COPY headroom/proxy/savings_attribution.py /usr/local/lib/python3.13/site-packages/headroom/proxy/savings_attribution.py
+COPY headroom/proxy/tool_schema_savings_policy.py /usr/local/lib/python3.13/site-packages/headroom/proxy/tool_schema_savings_policy.py
+COPY headroom/proxy/turn_hooks.py /usr/local/lib/python3.13/site-packages/headroom/proxy/turn_hooks.py
 COPY headroom/dashboard/templates/dashboard.html /usr/local/lib/python3.13/site-packages/headroom/dashboard/templates/dashboard.html
 COPY headroom/memory/adapters/sqlite.py /usr/local/lib/python3.13/site-packages/headroom/memory/adapters/sqlite.py
 COPY headroom/memory/backends/local.py /usr/local/lib/python3.13/site-packages/headroom/memory/backends/local.py
