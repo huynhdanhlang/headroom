@@ -51,6 +51,8 @@ COPY headroom/ headroom/
 # `headroom proxy --backend`, including Bedrock temporary/SSO credentials.
 # Those credentials require botocore (GH #1551), supplied by [bedrock].
 ARG HEADROOM_EXTRAS=proxy,code,bedrock
+# Bound native compilation on shared hosts; leave runtime worker settings alone.
+ARG CARGO_BUILD_JOBS=8
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
