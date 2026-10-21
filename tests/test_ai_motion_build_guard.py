@@ -24,6 +24,20 @@ def test_all_changed_runtime_files_must_be_copied():
     module.validate_overlay(changes, {name for _, name in changes})
 
 
+def test_local_native_base_accepts_only_the_verified_image_id():
+    module = guard()
+    expected = "sha256:" + "a" * 64
+    module.validate_base_image_id(expected + "\n", expected)
+    with pytest.raises(ValueError, match="does not match"):
+        module.validate_base_image_id("sha256:" + "b" * 64, expected)
+
+
+@pytest.mark.parametrize("expected", ["", "headroom:latest", "sha256:abc"])
+def test_local_native_base_rejects_an_unpinned_expected_id(expected):
+    with pytest.raises(ValueError, match="full sha256"):
+        guard().validate_base_image_id("sha256:" + "a" * 64, expected)
+
+
 @pytest.mark.parametrize(
     "path",
     ["pyproject.toml", "uv.lock", "Cargo.toml", "Cargo.lock", "crates/headroom-py/src/lib.rs"],
@@ -76,9 +90,10 @@ def test_actual_maintenance_recipe_is_supported():
 
 def test_guard_pins_integrated_upstream_source_and_native_image():
     module = guard()
-    assert module.UPSTREAM_BASE == "2912b7b620d7abd39828db73e4f326b9a041d309"
-    assert module.BASE_IMAGE == (
-        "ghcr.io/headroomlabs-ai/headroom:code-2912b7b@"
-        "sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f"
+    assert module.UPSTREAM_BASE == "3675d4839f35bac37c647408c0ef42c6721c368f"
+    assert module.BASE_IMAGE == "ai-motion-headroom-native:4c7acba5-tls-3675d4839f35"
+    assert (
+        module.BASE_IMAGE_ID
+        == "sha256:10b4f171b53b372c12ccdbdc2f4b55b488b3b0ff95612c744ff39021d61ff999"
     )
     assert module.SITE_PACKAGES == "/usr/local/lib/python3.13/site-packages/"

@@ -1,12 +1,40 @@
 # AI Motion Headroom maintenance fork
 
-Integrated upstream source: `fbf7bc3278c11975299b9bd0a2ecf200dfd25a05` (0.41.0).
-Native/dependency anchor: `2912b7b620d7abd39828db73e4f326b9a041d309`.
+Integrated upstream source: `4c7acba5937115b32ae51b67208251878e201b7a` (0.41.0).
+Native/dependency anchor: `3675d4839f35bac37c647408c0ef42c6721c368f`.
 
-The native/dependency base is the upstream AMD64 image from matching CI run
-38972065567's `digests-code-amd64` artifact (Docker, main CI 38972065620 and Security 38972077764 passed):
-`ghcr.io/headroomlabs-ai/headroom:code-2912b7b@sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f`.
-Pin this host's immutable platform digest rather than waiting for the multi-arch tag.
+The native/dependency base is rebuilt locally from the clean anchor above with
+the existing `Dockerfile --target runtime`, `RUNTIME_USER=root`, `RUNTIME_HOME=/root`
+and `CARGO_BUILD_JOBS=8`, with patched build tool `UV_VERSION=0.13.4`. Both
+the Python extension and Rust proxy are rebuilt.
+Local tag: `ai-motion-headroom-native:4c7acba5-tls-3675d4839f35`.
+Immutable image ID: `sha256:10b4f171b53b372c12ccdbdc2f4b55b488b3b0ff95612c744ff39021d61ff999`.
+The maintenance guard checks this exact ID before check-only or build; a missing
+or retargeted tag fails closed. No registry/publication or unverified fallback is
+introduced. Keep the base image with the release; reproduce it from the anchor
+before updating its explicit pin, never replace the tag without requalification.
+
+## Security rebuild and synchronization through 4c7acba5 (2026-10-22)
+
+Integrated seven upstream commits: bounded learn digest sections, inferred cache
+write accounting, client-visible terminal completion, optional graceful prefix
+state restoration, pinned embedder snapshot, aiohttp floor and Antigravity docs.
+Streaming merge retains the fork's drained-stream cleanup guard and adopts the
+upstream distinction between a delivered terminal and one withheld by the memory
+filter. Context/read protections, scoped memory, exact retrieval, raw billing,
+shared deadlines and SSE cooldown/no replay remain. Live model/context/cache/
+memory/worker settings remain unchanged; prefix snapshots stay opt-in.
+
+Upstream Security CI 39535067125 reported TLS and Python lock findings; it is not
+treated as passing. The rebuilt locks use rustls-webpki 0.103.16, webpki-roots
+1.0.10 (the 0.26.11 compatibility wrapper re-exports that patched parent), and
+certifi 2026.10.19. Current cargo-audit reports zero vulnerabilities. Pillow 13
+cannot satisfy optional fastembed's dependency constraint; no override, library
+substitution or Python/platform support reduction is introduced. Those optional
+Pillow lock advisories remain disclosed. The deployed code profile excludes
+Pillow/Python fastembed and is audited separately from the all-extras lock.
+Release qualification receipts are external; these updates do not establish
+provider inference acceleration or resolve every possible upstream stream fault.
 
 ## Python-only synchronization through fbf7bc32 (2026-10-18)
 
@@ -445,7 +473,8 @@ no percentage clipping is used to hide a mismatched count.
 ## Build
 
 Use a clean checkout. The overlay copies only the changed Python/frontend files onto
-an immutable upstream image, preserving its native extension and dependencies.
+an exact upstream digest or an image-ID-verified rebuilt base, preserving its
+native extension and dependencies.
 Changing Rust or dependencies requires rebuilding the base rather than this overlay.
 
 ```bash
@@ -453,7 +482,7 @@ python scripts/build_ai_motion.py --check-only
 python scripts/build_ai_motion.py
 ```
 
-The runtime reports `0.40.0+amv.<commit>` and OCI labels identify the full fork commit.
+The runtime reports `0.41.0+amv.<commit>` and OCI labels identify the full fork commit.
 The image preserves the AI Motion manager entrypoint (`headroom`) so one image can run
 both `proxy` and `mcp serve`. Direct use must include the subcommand, for example
 `docker run --rm IMAGE proxy --port 8787`; upstream examples that append only `--port`

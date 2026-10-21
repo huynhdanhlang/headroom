@@ -1,5 +1,5 @@
-# Python-only maintenance overlay on the exact upstream native build.
-FROM ghcr.io/headroomlabs-ai/headroom:code-2912b7b@sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f
+# Python-only maintenance overlay on the image-ID-verified native security build.
+FROM ai-motion-headroom-native:4c7acba5-tls-3675d4839f35
 ARG FORK_COMMIT
 USER root
 COPY headroom/observability/metrics.py /usr/local/lib/python3.13/site-packages/headroom/observability/metrics.py

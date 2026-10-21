@@ -6,14 +6,23 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shlex
 import subprocess
 from pathlib import Path
 
-UPSTREAM_BASE = "2912b7b620d7abd39828db73e4f326b9a041d309"
-BASE_IMAGE = "ghcr.io/headroomlabs-ai/headroom:code-2912b7b@sha256:bde2e1858a2b0527286ffb239d4eaf116c9fcceeca4573d4e747918304d92f0f"
+UPSTREAM_BASE = "3675d4839f35bac37c647408c0ef42c6721c368f"
+BASE_IMAGE = "ai-motion-headroom-native:4c7acba5-tls-3675d4839f35"
+BASE_IMAGE_ID = "sha256:10b4f171b53b372c12ccdbdc2f4b55b488b3b0ff95612c744ff39021d61ff999"
 SITE_PACKAGES = "/usr/local/lib/python3.13/site-packages/"
 NATIVE_INPUTS = {"pyproject.toml", "uv.lock", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"}
+
+
+def validate_base_image_id(actual: str, expected: str) -> None:
+    if re.fullmatch(r"sha256:[a-f0-9]{64}", expected) is None:
+        raise ValueError("Native base image pin must be a full sha256 image ID")
+    if actual.strip() != expected:
+        raise ValueError("Local native base image ID does not match the verified pin")
 
 
 def validate_overlay(changes, copied):
@@ -77,6 +86,21 @@ def main():
         .splitlines()
     ]
     validate_overlay(changes, copied)
+    if BASE_IMAGE_ID:
+        actual_base = subprocess.check_output(
+            [
+                "docker",
+                "--context",
+                "default",
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                BASE_IMAGE,
+            ],
+            text=True,
+        )
+        validate_base_image_id(actual_base, BASE_IMAGE_ID)
     hashes = {}
     for path in sorted(copied):
         committed = git("show", f"{revision}:{path}")
@@ -98,7 +122,18 @@ def main():
         str(root),
     ]
     print(
-        json.dumps({"commit": revision, "image": tag, "sourceHashes": hashes}, indent=2), flush=True
+        json.dumps(
+            {
+                "commit": revision,
+                "image": tag,
+                "nativeSource": UPSTREAM_BASE,
+                "baseImage": BASE_IMAGE,
+                "baseImageId": BASE_IMAGE_ID or None,
+                "sourceHashes": hashes,
+            },
+            indent=2,
+        ),
+        flush=True,
     )
     if not args.check_only:
         environment = {
